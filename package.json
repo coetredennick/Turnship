@@ -1,0 +1,31 @@
+{
+  "name": "turnship",
+  "version": "1.0.0",
+  "description": "Turnship project management platform",
+  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "lint": "npm run lint -w server && npm run lint -w client",
+    "test": "npm run test -w server && npm run test -w client",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^8.0.3",
+    "prettier": "^3.0.3",
+    "eslint": "^8.52.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.29.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "ISC"
+}
