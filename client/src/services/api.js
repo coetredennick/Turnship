@@ -112,6 +112,11 @@ export const generalAPI = {
 export const handleAPIError = (error, defaultMessage = 'An error occurred') => {
   console.error('Handling API Error:', error);
   
+  // Handle null/undefined errors
+  if (!error) {
+    return defaultMessage;
+  }
+  
   if (error.userMessage) {
     return error.userMessage;
   }
