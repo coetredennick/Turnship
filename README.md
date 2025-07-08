@@ -38,6 +38,10 @@ Turnship follows a monorepo structure with workspaces:
    The `CLIENT_URL` variable should point to the URL of the React
    frontend (default `http://localhost:5173`).
 
+   Google OAuth credentials must be provided via the environment variables
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` in
+   your `.env` file.
+
 ### Development
 
 Start both development servers concurrently:
@@ -127,5 +131,4 @@ For AI-assisted development, please refer to the [collaboration protocol](./clau
 5. Push and create a pull request
 
 ## License
-
 ISC
