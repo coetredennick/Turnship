@@ -34,3 +34,16 @@ CREATE TABLE IF NOT EXISTS tasks (
   FOREIGN KEY (project_id) REFERENCES projects(id),
   FOREIGN KEY (assignee_id) REFERENCES users(id)
 );
+
+-- OAuth tokens table
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  token_expiry DATETIME,
+  scope TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);

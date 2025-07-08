@@ -1,0 +1,162 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install server dependencies
+      run: npm ci --workspace=server
+
+    - name: Install client dependencies  
+      run: npm ci --workspace=client
+
+    - name: Lint code
+      run: npm run lint
+
+    - name: Run server tests
+      run: npm run test:ci --workspace=server
+      env:
+        CI: true
+
+    - name: Run client tests
+      run: npm run test:ci --workspace=client
+      env:
+        CI: true
+
+    - name: Build client
+      run: npm run build --workspace=client
+
+    - name: Upload server coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./server/coverage/lcov.info
+        flags: server
+        name: server-coverage
+
+    - name: Upload client coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./client/coverage/lcov.info
+        flags: client
+        name: client-coverage
+
+  security:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run security audit
+      run: npm audit --audit-level moderate
+
+    - name: Run server security audit
+      run: npm audit --audit-level moderate --workspace=server
+
+    - name: Run client security audit
+      run: npm audit --audit-level moderate --workspace=client
+
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install server dependencies
+      run: npm ci --workspace=server
+
+    - name: Install client dependencies
+      run: npm ci --workspace=client
+
+    - name: Build client for production
+      run: npm run build --workspace=client
+      env:
+        NODE_ENV: production
+
+    - name: Create deployment package
+      run: |
+        mkdir -p deployment
+        cp -r server deployment/
+        cp -r client/dist deployment/client
+        cp package.json deployment/
+        cd deployment && tar -czf ../turnship-deployment.tar.gz .
+
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: turnship-deployment
+        path: turnship-deployment.tar.gz
+        retention-days: 30
+
+  performance:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci && npm ci --workspace=server && npm ci --workspace=client
+
+    - name: Build client
+      run: npm run build --workspace=client
+
+    - name: Run Lighthouse CI
+      uses: treosh/lighthouse-ci-action@v10
+      with:
+        configPath: './.lighthouserc.json'
+        uploadArtifacts: true
+        temporaryPublicStorage: true

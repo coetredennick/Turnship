@@ -1,31 +1,37 @@
 {
   "name": "turnship",
   "version": "1.0.0",
-  "description": "Turnship project management platform",
-  "main": "index.js",
+  "description": "Amy's networking automation platform",
   "private": true,
   "workspaces": [
-    "server",
-    "client"
+    "client",
+    "server"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
-    "lint": "npm run lint -w server && npm run lint -w client",
-    "test": "npm run test -w server && npm run test -w client",
-    "build": "npm run build -w client",
-    "start": "npm run start -w server"
+    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "build": "npm run build --workspace=client",
+    "test": "npm run test --workspace=server && npm run test --workspace=client",
+    "test:watch": "concurrently \"npm run test:watch --workspace=server\" \"npm run test:watch --workspace=client\"",
+    "test:coverage": "npm run test:coverage --workspace=server && npm run test:coverage --workspace=client",
+    "test:ci": "npm run test:ci --workspace=server && npm run test:ci --workspace=client",
+    "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
+    "lint:fix": "npm run lint:fix --workspace=server && npm run lint:fix --workspace=client",
+    "start:server": "npm run start --workspace=server",
+    "start:client": "npm run preview --workspace=client",
+    "install:all": "npm install && npm install --workspace=server && npm install --workspace=client",
+    "coverage": "node scripts/test-coverage.js",
+    "coverage:open": "npm run coverage && open server/coverage/lcov-report/index.html && open client/coverage/lcov-report/index.html"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "husky": "^8.0.3",
-    "prettier": "^3.0.3",
-    "eslint": "^8.52.0",
-    "eslint-config-airbnb-base": "^15.0.0",
-    "eslint-plugin-import": "^2.29.0"
+    "concurrently": "^8.2.2"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "author": "",
-  "license": "ISC"
+  "keywords": [
+    "networking",
+    "automation",
+    "gmail",
+    "oauth",
+    "student"
+  ],
+  "author": "Amy Johnson",
+  "license": "MIT"
 }
