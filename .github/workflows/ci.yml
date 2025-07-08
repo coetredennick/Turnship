@@ -115,7 +115,7 @@ jobs:
         cd deployment && tar -czf ../turnship-deployment.tar.gz .
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: turnship-deployment
         path: turnship-deployment.tar.gz
