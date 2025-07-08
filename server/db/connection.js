@@ -16,9 +16,8 @@ const initDB = () => new Promise((resolve, reject) => {
     // Create users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
-      name TEXT,
-      google_id TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
