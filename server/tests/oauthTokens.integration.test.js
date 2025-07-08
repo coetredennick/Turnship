@@ -14,6 +14,9 @@ describe('OAuth Tokens DB integration', () => {
   beforeAll(async () => {
     // Remove existing test database to ensure a clean slate
     if (fs.existsSync(dbPath)) {
+      await new Promise((resolve) => {
+        db.close(() => resolve());
+      });
       fs.unlinkSync(dbPath);
     }
     await initDB();
@@ -34,8 +37,10 @@ describe('OAuth Tokens DB integration', () => {
     });
   });
 
-  afterAll(() => {
-    db.close();
+  afterAll(async () => {
+    await new Promise((resolve) => {
+      db.close(() => resolve());
+    });
     if (fs.existsSync(dbPath)) {
       fs.unlinkSync(dbPath);
     }
@@ -89,5 +94,21 @@ describe('OAuth Tokens DB integration', () => {
     expect(row.accessToken).toBe('new');
     expect(row.refreshToken).toBe('newRef');
     expect(new Date(row.tokenExpiry).toISOString()).toBe(newExpiry);
+  });
+
+  test('updateUserTokens inserts row when none exists', async () => {
+    const user = await createUser({ displayName: 'Carol', emails: [{ value: 'carol@example.com' }] });
+
+    const expiry = new Date(Date.now() + 3600000).toISOString();
+    await updateUserTokens(user.id, {
+      access_token: 'insert',
+      refresh_token: 'insertRef',
+      token_expiry: expiry,
+    });
+
+    const row = await getUserTokens(user.id);
+    expect(row.accessToken).toBe('insert');
+    expect(row.refreshToken).toBe('insertRef');
+    expect(new Date(row.tokenExpiry).toISOString()).toBe(expiry);
   });
 });

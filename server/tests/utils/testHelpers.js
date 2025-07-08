@@ -32,6 +32,7 @@ const initTestDatabase = async (db) => {
     scope TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id),
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`);
 
