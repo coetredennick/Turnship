@@ -132,7 +132,7 @@ describe('Auth Middleware', () => {
       const validTokens = {
         accessToken: 'valid-access-token',
         refreshToken: 'valid-refresh-token',
-        expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+        tokenExpiry: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         scope: 'profile email gmail.readonly',
       };
 
@@ -152,7 +152,7 @@ describe('Auth Middleware', () => {
       const expiredTokens = {
         accessToken: 'expired-access-token',
         refreshToken: 'valid-refresh-token',
-        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        tokenExpiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -184,7 +184,7 @@ describe('Auth Middleware', () => {
       const expiredTokens = {
         accessToken: 'expired-access-token',
         refreshToken: 'invalid-refresh-token',
-        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        tokenExpiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -214,7 +214,7 @@ describe('Auth Middleware', () => {
       const expiredTokens = {
         accessToken: 'expired-access-token',
         refreshToken: 'valid-refresh-token',
-        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        tokenExpiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -240,7 +240,7 @@ describe('Auth Middleware', () => {
       const soonToExpireTokens = {
         accessToken: 'soon-to-expire-token',
         refreshToken: 'valid-refresh-token',
-        expiresAt: new Date(Date.now() + 120000).toISOString(), // 2 minutes from now
+        tokenExpiry: new Date(Date.now() + 120000).toISOString(), // 2 minutes from now
         scope: 'profile email gmail.readonly',
       };
 
@@ -279,7 +279,7 @@ describe('Auth Middleware', () => {
       mockDb.getUserTokens.mockResolvedValue({
         accessToken: 'valid-token',
         refreshToken: 'valid-refresh',
-        expiresAt: futureExpiry,
+        tokenExpiry: futureExpiry,
       });
 
       // Test the full middleware chain
@@ -329,7 +329,7 @@ describe('Auth Middleware', () => {
       const validTokens = {
         accessToken: 'valid-token',
         refreshToken: 'valid-refresh',
-        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
         scope: 'profile email gmail.readonly',
       };
 
@@ -356,12 +356,12 @@ describe('Auth Middleware', () => {
         .mockResolvedValueOnce({
           accessToken: 'token1',
           refreshToken: 'refresh1',
-          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
         })
         .mockResolvedValueOnce({
           accessToken: 'token2',
           refreshToken: 'refresh2',
-          expiresAt: new Date(Date.now() + 3600000).toISOString(),
+          tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
         });
 
       // Both requests should be handled independently

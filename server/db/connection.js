@@ -134,8 +134,8 @@ const updateUserTokens = (userId, tokens) => {
   } = tokens;
 
   const updateQuery = `
-    UPDATE oauth_tokens 
-    SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = ?
+    UPDATE oauth_tokens
+    SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = ?
     WHERE user_id = ?
   `;
 
@@ -159,7 +159,7 @@ const updateUserTokens = (userId, tokens) => {
           userId: row.user_id,
           accessToken: row.access_token,
           refreshToken: row.refresh_token,
-          expiresAt: row.expires_at,
+          tokenExpiry: row.token_expiry,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         });
@@ -183,7 +183,7 @@ const getUserTokens = (userId) => new Promise((resolve, reject) => {
       userId: row.user_id,
       accessToken: row.access_token,
       refreshToken: row.refresh_token,
-      expiresAt: row.expires_at || row.token_expiry,
+      tokenExpiry: row.token_expiry,
       scope: row.scope,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
