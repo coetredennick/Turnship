@@ -1,7 +1,7 @@
 const request = require('supertest');
 const express = require('express');
-const authRoutes = require('../routes/auth');
 const { google } = require('googleapis');
+const authRoutes = require('../routes/auth');
 const { createGoogleAuthClient } = require('../middleware/auth');
 const mockDb = require('../db/connection');
 
