@@ -86,8 +86,8 @@ const createGoogleAuthClient = async (userId) => {
   );
 
   oauth2Client.setCredentials({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
   });
 
   return oauth2Client;

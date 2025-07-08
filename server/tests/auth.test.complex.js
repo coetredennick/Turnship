@@ -361,8 +361,8 @@ describe('Auth Routes Integration Tests', () => {
       const user2 = { ...testUser, id: 2, email: 'user2@example.com' };
 
       mockDb.getUserTokens
-        .mockResolvedValueOnce({ access_token: 'token1', refresh_token: 'refresh1' })
-        .mockResolvedValueOnce({ access_token: 'token2', refresh_token: 'refresh2' });
+        .mockResolvedValueOnce({ accessToken: 'token1', refreshToken: 'refresh1' })
+        .mockResolvedValueOnce({ accessToken: 'token2', refreshToken: 'refresh2' });
 
       // Create two authenticated apps
       const app1 = express();

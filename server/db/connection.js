@@ -169,12 +169,25 @@ const updateUserTokens = (userId, tokens) => {
 };
 
 const getUserTokens = (userId) => new Promise((resolve, reject) => {
-  db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (err, tokens) => {
+  db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (err, row) => {
     if (err) {
-      reject(err);
-    } else {
-      resolve(tokens);
+      return reject(err);
     }
+
+    if (!row) {
+      return resolve(null);
+    }
+
+    return resolve({
+      id: row.id,
+      userId: row.user_id,
+      accessToken: row.access_token,
+      refreshToken: row.refresh_token,
+      expiresAt: row.expires_at || row.token_expiry,
+      scope: row.scope,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    });
   });
 });
 
