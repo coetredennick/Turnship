@@ -130,9 +130,9 @@ describe('Auth Middleware', () => {
 
     it('should pass through when user tokens are valid and not expired', async () => {
       const validTokens = {
-        access_token: 'valid-access-token',
-        refresh_token: 'valid-refresh-token',
-        token_expiry: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+        accessToken: 'valid-access-token',
+        refreshToken: 'valid-refresh-token',
+        expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
         scope: 'profile email gmail.readonly',
       };
 
@@ -150,9 +150,9 @@ describe('Auth Middleware', () => {
       // due to Jest module mocking conflicts. End-to-end token refresh is validated
       // in auth.test.js integration tests.
       const expiredTokens = {
-        access_token: 'expired-access-token',
-        refresh_token: 'valid-refresh-token',
-        token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        accessToken: 'expired-access-token',
+        refreshToken: 'valid-refresh-token',
+        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -182,9 +182,9 @@ describe('Auth Middleware', () => {
       // Note: This test validates error handling logic. Token refresh error handling
       // is also validated through integration tests in auth.test.js.
       const expiredTokens = {
-        access_token: 'expired-access-token',
-        refresh_token: 'invalid-refresh-token',
-        token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        accessToken: 'expired-access-token',
+        refreshToken: 'invalid-refresh-token',
+        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -212,9 +212,9 @@ describe('Auth Middleware', () => {
       delete process.env.GOOGLE_CLIENT_SECRET;
 
       const expiredTokens = {
-        access_token: 'expired-access-token',
-        refresh_token: 'valid-refresh-token',
-        token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        accessToken: 'expired-access-token',
+        refreshToken: 'valid-refresh-token',
+        expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         scope: 'profile email gmail.readonly',
       };
 
@@ -238,9 +238,9 @@ describe('Auth Middleware', () => {
       // Note: This test validates the 5-minute expiry detection logic. The actual
       // refresh mechanism is validated through integration tests in auth.test.js.
       const soonToExpireTokens = {
-        access_token: 'soon-to-expire-token',
-        refresh_token: 'valid-refresh-token',
-        token_expiry: new Date(Date.now() + 120000).toISOString(), // 2 minutes from now
+        accessToken: 'soon-to-expire-token',
+        refreshToken: 'valid-refresh-token',
+        expiresAt: new Date(Date.now() + 120000).toISOString(), // 2 minutes from now
         scope: 'profile email gmail.readonly',
       };
 
@@ -277,9 +277,9 @@ describe('Auth Middleware', () => {
       req.user = { id: 1 };
       const futureExpiry = new Date(Date.now() + 3600000).toISOString();
       mockDb.getUserTokens.mockResolvedValue({
-        access_token: 'valid-token',
-        refresh_token: 'valid-refresh',
-        token_expiry: futureExpiry,
+        accessToken: 'valid-token',
+        refreshToken: 'valid-refresh',
+        expiresAt: futureExpiry,
       });
 
       // Test the full middleware chain
@@ -327,9 +327,9 @@ describe('Auth Middleware', () => {
 
       // Second call - refreshTokenIfNeeded
       const validTokens = {
-        access_token: 'valid-token',
-        refresh_token: 'valid-refresh',
-        token_expiry: new Date(Date.now() + 3600000).toISOString(),
+        accessToken: 'valid-token',
+        refreshToken: 'valid-refresh',
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
         scope: 'profile email gmail.readonly',
       };
 
@@ -354,14 +354,14 @@ describe('Auth Middleware', () => {
       // Mock different tokens for different users
       mockDb.getUserTokens
         .mockResolvedValueOnce({
-          access_token: 'token1',
-          refresh_token: 'refresh1',
-          token_expiry: new Date(Date.now() + 3600000).toISOString(),
+          accessToken: 'token1',
+          refreshToken: 'refresh1',
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
         })
         .mockResolvedValueOnce({
-          access_token: 'token2',
-          refresh_token: 'refresh2',
-          token_expiry: new Date(Date.now() + 3600000).toISOString(),
+          accessToken: 'token2',
+          refreshToken: 'refresh2',
+          expiresAt: new Date(Date.now() + 3600000).toISOString(),
         });
 
       // Both requests should be handled independently
