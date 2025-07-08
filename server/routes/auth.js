@@ -1,194 +1,128 @@
 const express = require('express');
 const passport = require('passport');
 const { google } = require('googleapis');
-const { requireAuth, createGoogleAuthClient } = require('../middleware/auth');
-const { createUser, findUserByEmail, updateUserTokens } = require('../db/connection');
+const { requireAuth } = require('../middleware/auth');
+const { getUserTokens } = require('../db/connection');
 
 const router = express.Router();
 
-// Initiate Google OAuth flow
-router.get('/google', (req, res, next) => {
-  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    return res.status(500).json({
-      error: 'OAuth not configured. Please set Google OAuth credentials.',
-      code: 'OAUTH_NOT_CONFIGURED',
-      status: 500
-    });
-  }
-
-  passport.authenticate('google', {
-    scope: [
-      'profile',
-      'email',
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/gmail.send'
-    ]
-  })(req, res, next);
-});
+// Initiate Google OAuth
+router.get('/google', (req, res, next) => passport.authenticate('google', {
+  scope: [
+    'profile',
+    'email',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+  ],
+})(req, res, next));
 
 // Handle OAuth callback
-router.get('/google/callback', (req, res, next) => {
-  // Handle OAuth denial
-  if (req.query.error) {
-    console.log('OAuth denied:', req.query.error);
-    return res.redirect(`http://localhost:5173/?error=oauth_denied`);
+router.get('/google/callback', (req, res, next) => passport.authenticate('google', {
+  failureRedirect: '/?error=oauth_failed',
+}, async (authErr, user) => {
+  if (authErr) {
+    console.error('OAuth authentication error:', authErr);
+    return res.redirect('/?error=oauth_error');
   }
 
-  passport.authenticate('google', { 
-    failureRedirect: 'http://localhost:5173/?error=oauth_failed' 
-  }, async (err, user, info) => {
-    if (err) {
-      console.error('OAuth error:', err);
-      return res.redirect(`http://localhost:5173/?error=oauth_error`);
+  if (!user) {
+    console.error('No user returned from OAuth');
+    return res.redirect('/?error=oauth_denied');
+  }
+
+  return req.logIn(user, (loginErr) => {
+    if (loginErr) {
+      console.error('Login error:', loginErr);
+      return res.redirect('/?error=session_error');
     }
 
-    if (!user) {
-      console.log('OAuth failed - no user returned');
-      return res.redirect(`http://localhost:5173/?error=oauth_failed`);
-    }
+    return res.redirect('/');
+  });
+})(req, res, next));
 
-    try {
-      // Log the user in using passport session
-      req.logIn(user, (err) => {
-        if (err) {
-          console.error('Session login error:', err);
-          return res.redirect(`http://localhost:5173/?error=session_error`);
-        }
+// Get current user
+router.get('/me', requireAuth, (req, res) => res.json({
+  user: {
+    id: req.user.id,
+    email: req.user.email,
+    name: req.user.name,
+  },
+  authenticated: true,
+}));
 
-        console.log('User logged in successfully:', user.email);
-        return res.redirect('http://localhost:5173/dashboard');
-      });
-    } catch (error) {
-      console.error('Callback processing error:', error);
-      return res.redirect(`http://localhost:5173/?error=callback_error`);
-    }
-  })(req, res, next);
-});
-
-// Get current user info (protected route)
-router.get('/me', requireAuth, (req, res) => {
-  try {
-    res.json({
-      user: {
-        id: req.user.id,
-        username: req.user.username,
-        email: req.user.email,
-        created_at: req.user.created_at
-      },
-      authenticated: true
-    });
-  } catch (error) {
-    console.error('Error in /me route:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      code: 'INTERNAL_ERROR',
-      status: 500
+// Logout
+router.post('/logout', (req, res) => req.logout((logoutErr) => {
+  if (logoutErr) {
+    console.error('Logout error:', logoutErr);
+    return res.status(500).json({
+      error: 'Logout failed',
+      message: 'Failed to logout user',
     });
   }
-});
 
-// Logout route
-router.post('/logout', (req, res) => {
-  try {
-    req.logout((err) => {
-      if (err) {
-        console.error('Logout error:', err);
-        return res.status(500).json({
-          error: 'Logout failed',
-          code: 'LOGOUT_ERROR',
-          status: 500
-        });
-      }
+  return res.json({
+    message: 'Logged out successfully',
+    authenticated: false,
+  });
+}));
 
-      req.session.destroy((err) => {
-        if (err) {
-          console.error('Session destroy error:', err);
-          return res.status(500).json({
-            error: 'Session cleanup failed',
-            code: 'SESSION_ERROR',
-            status: 500
-          });
-        }
-
-        res.clearCookie('connect.sid');
-        res.json({ 
-          message: 'Logged out successfully',
-          redirectUrl: 'http://localhost:5173/'
-        });
-      });
-    });
-  } catch (error) {
-    console.error('Logout route error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      code: 'INTERNAL_ERROR',
-      status: 500
-    });
-  }
-});
-
-// Test Gmail API connection (protected route)
+// Test Gmail connection
 router.get('/gmail/test', requireAuth, async (req, res) => {
   try {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      return res.status(500).json({
-        error: 'OAuth not configured',
-        code: 'OAUTH_NOT_CONFIGURED',
-        status: 500
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI,
+    );
+
+    // Set credentials from user's stored tokens
+    const tokens = await getUserTokens(req.user.id);
+    if (!tokens) {
+      return res.status(401).json({
+        error: 'No tokens found',
+        message: 'Please re-authenticate with Google',
       });
     }
 
-    const auth = await createGoogleAuthClient(req.user.id);
-    const gmail = google.gmail({ version: 'v1', auth });
+    oauth2Client.setCredentials({
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+    });
 
-    // Get user profile from Gmail API
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
     const profile = await gmail.users.getProfile({ userId: 'me' });
-    
-    res.json({
+
+    return res.json({
       message: 'Gmail API connection successful',
       profile: {
         emailAddress: profile.data.emailAddress,
         messagesTotal: profile.data.messagesTotal,
         threadsTotal: profile.data.threadsTotal,
-        historyId: profile.data.historyId
-      }
+      },
     });
   } catch (error) {
-    console.error('Gmail API test error:', error);
-    
-    if (error.code === 401) {
-      return res.status(401).json({
-        error: 'Gmail API authentication failed. Token may be expired.',
-        code: 'GMAIL_AUTH_FAILED',
-        status: 401
-      });
-    }
-
-    res.status(500).json({
-      error: 'Gmail API test failed',
-      code: 'GMAIL_API_ERROR',
-      status: 500,
-      details: error.message
+    console.error('Gmail test error:', error);
+    return res.status(500).json({
+      error: 'Gmail connection failed',
+      message: error.message || 'Failed to connect to Gmail API',
+      needsReauth: error.code === 401 || error.code === 403,
     });
   }
 });
 
-// Error handling middleware for auth routes
-router.use((error, req, res, next) => {
-  console.error('Auth route error:', error);
-  
-  if (error.name === 'TokenError') {
-    return res.status(401).json({
-      error: 'Invalid or expired token',
-      code: 'TOKEN_ERROR',
-      status: 401
-    });
-  }
+// Health check endpoint
+router.get('/health', (req, res) => res.json({
+  status: 'healthy',
+  timestamp: new Date().toISOString(),
+  service: 'turnship-auth',
+}));
 
-  res.status(500).json({
+// Error handling middleware for auth routes
+router.use((err, req, res) => {
+  console.error('Auth route error:', err);
+  return res.status(500).json({
     error: 'Authentication service error',
-    code: 'AUTH_SERVICE_ERROR',
-    status: 500
+    message: 'An error occurred in the authentication service',
   });
 });
 

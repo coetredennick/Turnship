@@ -20,7 +20,7 @@ initializeOAuth();
 
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
+  credentials: true,
 }));
 
 app.use(express.json());
@@ -34,8 +34,8 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  },
 }));
 
 // Initialize Passport
@@ -55,7 +55,7 @@ if (process.env.NODE_ENV !== 'test') {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
-  
+
   module.exports = { app, server };
 } else {
   module.exports = { app };

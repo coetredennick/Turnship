@@ -17,9 +17,9 @@ jest.mock('../db/connection', () => {
     findUserById: jest.fn(),
     findUserByEmail: jest.fn(),
     updateUserTokens: jest.fn(),
-    getUserTokens: jest.fn()
+    getUserTokens: jest.fn(),
   };
-  
+
   return mockFunctions;
 });
 
@@ -35,13 +35,13 @@ describe('Database Operations', () => {
       it('should create a new user from Google profile', async () => {
         const googleProfile = {
           displayName: 'John Doe',
-          emails: [{ value: 'john@example.com' }]
+          emails: [{ value: 'john@example.com' }],
         };
 
         const expectedUser = {
           id: 1,
           username: 'John Doe',
-          email: 'john@example.com'
+          email: 'john@example.com',
         };
 
         dbModule.createUser.mockResolvedValue(expectedUser);
@@ -55,7 +55,7 @@ describe('Database Operations', () => {
       it('should handle missing email in profile', async () => {
         const invalidProfile = {
           displayName: 'John Doe',
-          emails: []
+          emails: [],
         };
 
         dbModule.createUser.mockRejectedValue(new Error('Email is required'));
@@ -69,7 +69,7 @@ describe('Database Operations', () => {
         const expectedUser = {
           id: 1,
           username: 'John Doe',
-          email: 'john@example.com'
+          email: 'john@example.com',
         };
 
         dbModule.findUserById.mockResolvedValue(expectedUser);
@@ -94,7 +94,7 @@ describe('Database Operations', () => {
         const expectedUser = {
           id: 1,
           username: 'John Doe',
-          email: 'john@example.com'
+          email: 'john@example.com',
         };
 
         dbModule.findUserByEmail.mockResolvedValue(expectedUser);
@@ -122,7 +122,7 @@ describe('Database Operations', () => {
           access_token: 'new-access-token',
           refresh_token: 'new-refresh-token',
           token_expiry: new Date(Date.now() + 3600000),
-          scope: 'profile email gmail.readonly'
+          scope: 'profile email gmail.readonly',
         };
 
         dbModule.updateUserTokens.mockResolvedValue(undefined);
@@ -137,7 +137,7 @@ describe('Database Operations', () => {
           access_token: 'test-token',
           refresh_token: 'test-refresh',
           token_expiry: new Date(),
-          scope: ['profile', 'email', 'gmail.readonly']
+          scope: ['profile', 'email', 'gmail.readonly'],
         };
 
         dbModule.updateUserTokens.mockResolvedValue(undefined);
@@ -155,7 +155,7 @@ describe('Database Operations', () => {
           access_token: 'test-access-token',
           refresh_token: 'test-refresh-token',
           token_expiry: new Date(Date.now() + 3600000).toISOString(),
-          scope: 'profile email gmail.readonly'
+          scope: 'profile email gmail.readonly',
         };
 
         dbModule.getUserTokens.mockResolvedValue(expectedTokens);
@@ -182,7 +182,7 @@ describe('Database Operations', () => {
 
       const profile = {
         displayName: 'John Doe',
-        emails: [{ value: 'duplicate@example.com' }]
+        emails: [{ value: 'duplicate@example.com' }],
       };
 
       await expect(dbModule.createUser(profile)).rejects.toThrow('User with this email already exists');
@@ -193,7 +193,7 @@ describe('Database Operations', () => {
 
       const invalidProfile = {
         displayName: 'John Doe',
-        emails: [{ value: null }]
+        emails: [{ value: null }],
       };
 
       await expect(dbModule.createUser(invalidProfile)).rejects.toThrow('Email is required');

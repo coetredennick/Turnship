@@ -1,9 +1,12 @@
 const request = require('supertest');
 const express = require('express');
+const session = require('express-session');
+const passport = require('passport');
+const authRoutes = require('../routes/auth');
 
 // Mock external dependencies properly
 jest.mock('../services/oauth', () => ({
-  initializeOAuth: jest.fn()
+  initializeOAuth: jest.fn(),
 }));
 
 // Mock database with realistic implementations
@@ -13,7 +16,7 @@ const mockDb = {
   findUserByEmail: jest.fn(),
   createUser: jest.fn(),
   updateUserTokens: jest.fn(),
-  getUserTokens: jest.fn()
+  getUserTokens: jest.fn(),
 };
 
 jest.mock('../db/connection', () => mockDb);
@@ -21,17 +24,15 @@ jest.mock('../db/connection', () => mockDb);
 // Mock the auth middleware
 const mockCreateGoogleAuthClient = jest.fn();
 jest.mock('../middleware/auth', () => ({
-  requireAuth: (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        code: 'AUTH_REQUIRED'
-      });
+  requireAuth: jest.fn((req, res, next) => {
+    if (req.session && req.session.user) {
+      req.user = req.session.user;
+      return next();
     }
-    next();
-  },
+    return res.status(401).json({ error: 'Authentication required' });
+  }),
   refreshTokenIfNeeded: jest.fn((req, res, next) => next()),
-  createGoogleAuthClient: mockCreateGoogleAuthClient
+  createGoogleAuthClient: mockCreateGoogleAuthClient,
 }));
 
 // Mock Gmail API with realistic responses
@@ -42,10 +43,10 @@ const mockGmailAPI = {
         emailAddress: 'test@example.com',
         messagesTotal: 1234,
         threadsTotal: 567,
-        historyId: '12345'
-      }
-    })
-  }
+        historyId: '12345',
+      },
+    }),
+  },
 };
 
 const mockOAuth2Client = {
@@ -54,21 +55,21 @@ const mockOAuth2Client = {
     credentials: {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
-      expiry_date: Date.now() + 3600000
-    }
-  })
+      expiry_date: Date.now() + 3600000,
+    },
+  }),
 };
 
 // Create a mock google object that behaves like the real googleapis
 const mockGoogle = {
   auth: {
-    OAuth2: jest.fn().mockImplementation(() => mockOAuth2Client)
+    OAuth2: jest.fn().mockImplementation(() => mockOAuth2Client),
   },
-  gmail: jest.fn().mockImplementation(() => mockGmailAPI)
+  gmail: jest.fn().mockImplementation(() => mockGmailAPI),
 };
 
 jest.mock('googleapis', () => ({
-  google: mockGoogle
+  google: mockGoogle,
 }));
 
 describe('Auth Routes Integration Tests', () => {
@@ -78,7 +79,7 @@ describe('Auth Routes Integration Tests', () => {
   beforeEach(() => {
     // Clear all mocks
     jest.clearAllMocks();
-    
+
     // Reset mock implementations
     mockOAuth2Client.setCredentials.mockClear();
     mockOAuth2Client.refreshAccessToken.mockClear();
@@ -92,8 +93,8 @@ describe('Auth Routes Integration Tests', () => {
         emailAddress: 'test@example.com',
         messagesTotal: 1234,
         threadsTotal: 567,
-        historyId: '12345'
-      }
+        historyId: '12345',
+      },
     });
 
     // Ensure gmail mock returns the expected structure
@@ -104,7 +105,7 @@ describe('Auth Routes Integration Tests', () => {
       id: 1,
       username: 'Test User',
       email: 'test@example.com',
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
 
     // Set default environment variables
@@ -117,13 +118,13 @@ describe('Auth Routes Integration Tests', () => {
     beforeEach(() => {
       app = express();
       app.use(express.json());
-      
+
       // Mock minimal auth middleware for testing
       app.use((req, res, next) => {
         req.user = null; // Default to not authenticated
         next();
       });
-      
+
       app.use('/auth', require('../routes/auth'));
     });
 
@@ -191,7 +192,7 @@ describe('Auth Routes Integration Tests', () => {
     it('should logout successfully', async () => {
       app = express();
       app.use(express.json());
-      
+
       app.use((req, res, next) => {
         req.user = testUser;
         req.logout = jest.fn((callback) => {
@@ -199,11 +200,11 @@ describe('Auth Routes Integration Tests', () => {
           callback();
         });
         req.session = {
-          destroy: jest.fn((callback) => callback())
+          destroy: jest.fn((callback) => callback()),
         };
         next();
       });
-      
+
       app.use('/auth', require('../routes/auth'));
 
       const response = await request(app)
@@ -217,7 +218,7 @@ describe('Auth Routes Integration Tests', () => {
     it('should handle logout errors gracefully', async () => {
       app = express();
       app.use(express.json());
-      
+
       app.use((req, res, next) => {
         req.user = testUser;
         req.logout = jest.fn((callback) => {
@@ -225,7 +226,7 @@ describe('Auth Routes Integration Tests', () => {
         });
         next();
       });
-      
+
       app.use('/auth', require('../routes/auth'));
 
       const response = await request(app)
@@ -303,11 +304,11 @@ describe('Auth Routes Integration Tests', () => {
     it('should handle expired tokens by returning 401', async () => {
       // Mock createGoogleAuthClient to return client, but Gmail API returns 401
       mockCreateGoogleAuthClient.mockResolvedValue(mockOAuth2Client);
-      
+
       // Mock Gmail API to return 401 for expired token
       mockGmailAPI.users.getProfile.mockRejectedValue({
         code: 401,
-        message: 'Invalid Credentials'
+        message: 'Invalid Credentials',
       });
 
       app.use((req, res, next) => {
@@ -327,7 +328,7 @@ describe('Auth Routes Integration Tests', () => {
     it('should handle Gmail API errors gracefully', async () => {
       // Mock createGoogleAuthClient to return our OAuth client
       mockCreateGoogleAuthClient.mockResolvedValue(mockOAuth2Client);
-      
+
       // Mock Gmail API error
       mockGmailAPI.users.getProfile.mockRejectedValue(new Error('Gmail API Error'));
 

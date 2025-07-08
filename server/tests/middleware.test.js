@@ -1,7 +1,7 @@
 // Mock dependencies
 jest.mock('../db/connection', () => ({
   getUserTokens: jest.fn(),
-  updateUserTokens: jest.fn()
+  updateUserTokens: jest.fn(),
 }));
 
 // Create mock OAuth2 client
@@ -11,43 +11,46 @@ const mockOAuth2Client = {
     credentials: {
       access_token: 'new-access-token',
       refresh_token: 'new-refresh-token',
-      expiry_date: Date.now() + 3600000
-    }
-  })
+      expiry_date: Date.now() + 3600000,
+    },
+  }),
 };
 
 // Create a mock google object that behaves like the real googleapis
 const mockGoogle = {
   auth: {
-    OAuth2: jest.fn().mockImplementation(() => mockOAuth2Client)
-  }
+    OAuth2: jest.fn().mockImplementation(() => mockOAuth2Client),
+  },
 };
 
 jest.mock('googleapis', () => ({
-  google: mockGoogle
+  google: mockGoogle,
 }));
 
 // Import the middleware functions AFTER mocking
-const { requireAuth, optionalAuth, refreshTokenIfNeeded, createGoogleAuthClient } = require('../middleware/auth');
+const {
+  requireAuth, optionalAuth, refreshTokenIfNeeded, createGoogleAuthClient,
+} = require('../middleware/auth');
 
 const mockDb = require('../db/connection');
 
 describe('Auth Middleware', () => {
-  let req, res, next;
+  let req; let res; let
+    next;
 
   beforeEach(() => {
     req = {
       user: null,
       headers: {},
-      session: {}
+      session: {},
     };
     res = {
       status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis()
+      json: jest.fn().mockReturnThis(),
     };
     next = jest.fn();
     jest.clearAllMocks();
-    
+
     // Reset mock implementations
     mockOAuth2Client.setCredentials.mockClear();
     mockOAuth2Client.refreshAccessToken.mockClear();
@@ -60,10 +63,10 @@ describe('Auth Middleware', () => {
 
   describe('requireAuth', () => {
     it('should call next() when user is authenticated', () => {
-      req.user = { 
-        id: 1, 
+      req.user = {
+        id: 1,
         email: 'test@example.com',
-        username: 'Test User'
+        username: 'Test User',
       };
 
       requireAuth(req, res, next);
@@ -80,7 +83,7 @@ describe('Auth Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         error: 'Authentication required',
-        code: 'AUTH_REQUIRED'
+        message: 'Please log in to access this resource',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -93,7 +96,7 @@ describe('Auth Middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         error: 'Authentication required',
-        code: 'AUTH_REQUIRED'
+        message: 'Please log in to access this resource',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -118,7 +121,7 @@ describe('Auth Middleware', () => {
     const testUser = {
       id: 1,
       email: 'test@example.com',
-      username: 'Test User'
+      username: 'Test User',
     };
 
     beforeEach(() => {
@@ -130,7 +133,7 @@ describe('Auth Middleware', () => {
         access_token: 'valid-access-token',
         refresh_token: 'valid-refresh-token',
         token_expiry: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(validTokens);
@@ -142,8 +145,6 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
-
-
     it('should refresh tokens when they are expired', async () => {
       // Note: This test validates the refresh trigger logic but uses simplified mocking
       // due to Jest module mocking conflicts. End-to-end token refresh is validated
@@ -152,7 +153,7 @@ describe('Auth Middleware', () => {
         access_token: 'expired-access-token',
         refresh_token: 'valid-refresh-token',
         token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(expiredTokens);
@@ -162,7 +163,7 @@ describe('Auth Middleware', () => {
       // Verify the middleware was called and database was accessed
       expect(mockDb.getUserTokens).toHaveBeenCalledWith(testUser.id);
       expect(next).toHaveBeenCalled();
-      
+
       // Note: OAuth client interactions are validated through integration tests
       // due to Jest mocking complexity with googleapis module
     });
@@ -184,7 +185,7 @@ describe('Auth Middleware', () => {
         access_token: 'expired-access-token',
         refresh_token: 'invalid-refresh-token',
         token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(expiredTokens);
@@ -193,7 +194,7 @@ describe('Auth Middleware', () => {
 
       expect(mockDb.getUserTokens).toHaveBeenCalledWith(testUser.id);
       expect(next).toHaveBeenCalled(); // Should continue despite any refresh issues
-      
+
       // Note: OAuth client error handling is validated through integration tests
     });
 
@@ -214,7 +215,7 @@ describe('Auth Middleware', () => {
         access_token: 'expired-access-token',
         refresh_token: 'valid-refresh-token',
         token_expiry: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(expiredTokens);
@@ -240,7 +241,7 @@ describe('Auth Middleware', () => {
         access_token: 'soon-to-expire-token',
         refresh_token: 'valid-refresh-token',
         token_expiry: new Date(Date.now() + 120000).toISOString(), // 2 minutes from now
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(soonToExpireTokens);
@@ -250,7 +251,7 @@ describe('Auth Middleware', () => {
       // Verify the middleware identifies tokens that will expire soon
       expect(mockDb.getUserTokens).toHaveBeenCalledWith(testUser.id);
       expect(next).toHaveBeenCalled();
-      
+
       // Note: Token refresh timing logic is validated through integration tests
     });
   });
@@ -278,7 +279,7 @@ describe('Auth Middleware', () => {
       mockDb.getUserTokens.mockResolvedValue({
         access_token: 'valid-token',
         refresh_token: 'valid-refresh',
-        token_expiry: futureExpiry
+        token_expiry: futureExpiry,
       });
 
       // Test the full middleware chain
@@ -302,6 +303,10 @@ describe('Auth Middleware', () => {
       next.mockClear();
       requireAuth(req, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.json).toHaveBeenCalledWith({
+        error: 'Authentication required',
+        message: 'Please log in to access this resource',
+      });
       expect(next).not.toHaveBeenCalled();
     });
 
@@ -309,7 +314,7 @@ describe('Auth Middleware', () => {
       const testUser = {
         id: 1,
         email: 'test@example.com',
-        username: 'Test User'
+        username: 'Test User',
       };
 
       // First call - requireAuth
@@ -325,7 +330,7 @@ describe('Auth Middleware', () => {
         access_token: 'valid-token',
         refresh_token: 'valid-refresh',
         token_expiry: new Date(Date.now() + 3600000).toISOString(),
-        scope: 'profile email gmail.readonly'
+        scope: 'profile email gmail.readonly',
       };
 
       mockDb.getUserTokens.mockResolvedValue(validTokens);
@@ -351,18 +356,18 @@ describe('Auth Middleware', () => {
         .mockResolvedValueOnce({
           access_token: 'token1',
           refresh_token: 'refresh1',
-          token_expiry: new Date(Date.now() + 3600000).toISOString()
+          token_expiry: new Date(Date.now() + 3600000).toISOString(),
         })
         .mockResolvedValueOnce({
           access_token: 'token2',
           refresh_token: 'refresh2',
-          token_expiry: new Date(Date.now() + 3600000).toISOString()
+          token_expiry: new Date(Date.now() + 3600000).toISOString(),
         });
 
       // Both requests should be handled independently
       await Promise.all([
         refreshTokenIfNeeded(req1, res1, next1),
-        refreshTokenIfNeeded(req2, res2, next2)
+        refreshTokenIfNeeded(req2, res2, next2),
       ]);
 
       expect(next1).toHaveBeenCalled();

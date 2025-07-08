@@ -16,16 +16,13 @@ const initDB = () => new Promise((resolve, reject) => {
     // Create users table
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
+      name TEXT,
+      google_id TEXT UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
-      if (err) {
-        console.error('Error creating users table:', err.message);
-        reject(err);
-        return;
-      }
+      if (err) reject(err);
     });
 
     // Create projects table
@@ -41,7 +38,6 @@ const initDB = () => new Promise((resolve, reject) => {
       if (err) {
         console.error('Error creating projects table:', err.message);
         reject(err);
-        return;
       }
     });
 
@@ -62,7 +58,6 @@ const initDB = () => new Promise((resolve, reject) => {
       if (err) {
         console.error('Error creating tasks table:', err.message);
         reject(err);
-        return;
       }
     });
 
@@ -90,113 +85,106 @@ const initDB = () => new Promise((resolve, reject) => {
 });
 
 // User operations
-const createUser = (googleProfile) => {
-  return new Promise((resolve, reject) => {
-    const { displayName, emails } = googleProfile;
-    const email = emails[0].value;
-    const username = displayName;
+const createUser = (googleProfile) => new Promise((resolve, reject) => {
+  const { displayName, emails } = googleProfile;
+  const email = emails[0].value;
+  const username = displayName;
 
-    db.run(
-      'INSERT INTO users (username, email) VALUES (?, ?)',
-      [username, email],
-      function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            id: this.lastID,
-            username,
-            email
-          });
-        }
-      }
-    );
-  });
-};
-
-const findUserById = (id) => {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM users WHERE id = ?', [id], (err, user) => {
+  db.run(
+    'INSERT INTO users (username, email) VALUES (?, ?)',
+    [username, email],
+    function insertCallback(err) {
       if (err) {
         reject(err);
       } else {
-        resolve(user);
+        resolve({
+          id: this.lastID,
+          username,
+          email,
+        });
       }
-    });
-  });
-};
+    },
+  );
+});
 
-const findUserByEmail = (email) => {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(user);
-      }
-    });
+const findUserById = (id) => new Promise((resolve, reject) => {
+  db.get('SELECT * FROM users WHERE id = ?', [id], (err, user) => {
+    if (err) {
+      reject(err);
+    } else {
+      resolve(user);
+    }
   });
-};
+});
+
+const findUserByEmail = (email) => new Promise((resolve, reject) => {
+  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+    if (err) {
+      reject(err);
+    } else {
+      resolve(user);
+    }
+  });
+});
 
 const updateUserTokens = (userId, tokens) => {
+  const {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    token_expiry: tokenExpiry,
+  } = tokens;
+
+  const updateQuery = `
+    UPDATE oauth_tokens 
+    SET access_token = ?, refresh_token = ?, expires_at = ?, updated_at = ?
+    WHERE user_id = ?
+  `;
+
   return new Promise((resolve, reject) => {
-    const { access_token, refresh_token, token_expiry, scope } = tokens;
-    const tokenExpiryString = token_expiry instanceof Date ? token_expiry.toISOString() : token_expiry;
-    const scopeString = Array.isArray(scope) ? scope.join(' ') : scope;
-
-    db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (err, existingToken) => {
+    db.run(updateQuery, [
+      accessToken, refreshToken, tokenExpiry, Date.now(), userId,
+    ], (err) => {
       if (err) {
-        reject(err);
-        return;
+        console.error('Error updating user tokens:', err);
+        return reject(err);
       }
 
-      if (existingToken) {
-        db.run(
-          'UPDATE oauth_tokens SET access_token = ?, refresh_token = ?, token_expiry = ?, scope = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
-          [access_token, refresh_token, tokenExpiryString, scopeString, userId],
-          (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          }
-        );
-      } else {
-        db.run(
-          'INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)',
-          [userId, access_token, refresh_token, tokenExpiryString, scopeString],
-          (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          }
-        );
-      }
+      return db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (selectErr, row) => {
+        if (selectErr) {
+          console.error('Error fetching updated tokens:', selectErr);
+          return reject(selectErr);
+        }
+
+        return resolve({
+          id: row.id,
+          userId: row.user_id,
+          accessToken: row.access_token,
+          refreshToken: row.refresh_token,
+          expiresAt: row.expires_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      });
     });
   });
 };
 
-const getUserTokens = (userId) => {
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (err, tokens) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(tokens);
-      }
-    });
+const getUserTokens = (userId) => new Promise((resolve, reject) => {
+  db.get('SELECT * FROM oauth_tokens WHERE user_id = ?', [userId], (err, tokens) => {
+    if (err) {
+      reject(err);
+    } else {
+      resolve(tokens);
+    }
   });
-};
+});
 
-module.exports = { 
-  db, 
-  initDB, 
-  createUser, 
-  findUserById, 
-  findUserByEmail, 
-  updateUserTokens, 
-  getUserTokens 
+module.exports = {
+  db,
+  initDB,
+  createUser,
+  findUserById,
+  findUserByEmail,
+  updateUserTokens,
+  getUserTokens,
 };

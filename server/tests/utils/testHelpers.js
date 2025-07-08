@@ -4,12 +4,12 @@ const { promisify } = require('util');
 // Create in-memory test database
 const createTestDatabase = () => {
   const db = new sqlite3.Database(':memory:');
-  
+
   // Promisify database methods
   db.runAsync = promisify(db.run.bind(db));
   db.getAsync = promisify(db.get.bind(db));
   db.allAsync = promisify(db.all.bind(db));
-  
+
   return db;
 };
 
@@ -43,17 +43,17 @@ const createTestUser = async (db, userData = {}) => {
   const defaultUser = {
     username: 'Test User',
     email: 'test@example.com',
-    ...userData
+    ...userData,
   };
 
   const result = await db.runAsync(
     'INSERT INTO users (username, email) VALUES (?, ?)',
-    [defaultUser.username, defaultUser.email]
+    [defaultUser.username, defaultUser.email],
   );
 
   return {
     id: result.lastID,
-    ...defaultUser
+    ...defaultUser,
   };
 };
 
@@ -64,12 +64,12 @@ const createTestTokens = async (db, userId, tokenData = {}) => {
     refresh_token: 'test-refresh-token',
     token_expiry: new Date(Date.now() + 3600000).toISOString(),
     scope: 'profile email https://www.googleapis.com/auth/gmail.readonly',
-    ...tokenData
+    ...tokenData,
   };
 
   await db.runAsync(
     'INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)',
-    [userId, defaultTokens.access_token, defaultTokens.refresh_token, defaultTokens.token_expiry, defaultTokens.scope]
+    [userId, defaultTokens.access_token, defaultTokens.refresh_token, defaultTokens.token_expiry, defaultTokens.scope],
   );
 
   return defaultTokens;
@@ -82,9 +82,9 @@ const createMockGoogleProfile = (overrides = {}) => ({
   emails: [{ value: 'test@example.com' }],
   photos: [{ value: 'https://example.com/photo.jpg' }],
   _json: {
-    scope: 'profile email https://www.googleapis.com/auth/gmail.readonly'
+    scope: 'profile email https://www.googleapis.com/auth/gmail.readonly',
   },
-  ...overrides
+  ...overrides,
 });
 
 // Mock Gmail API response
@@ -94,26 +94,26 @@ const createMockGmailProfile = (overrides = {}) => ({
     messagesTotal: 1234,
     threadsTotal: 567,
     historyId: '12345',
-    ...overrides
-  }
+    ...overrides,
+  },
 });
 
 // Create authenticated session for testing
 const createAuthenticatedSession = (agent, user) => {
   const session = {
     passport: {
-      user: user.id
-    }
+      user: user.id,
+    },
   };
-  
+
   // Mock session middleware
   agent.set('Cookie', [`connect.sid=${Buffer.from(JSON.stringify(session)).toString('base64')}`]);
-  
+
   return agent;
 };
 
 // Wait for async operations
-const waitFor = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const waitFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 module.exports = {
   createTestDatabase,
@@ -123,5 +123,5 @@ module.exports = {
   createMockGoogleProfile,
   createMockGmailProfile,
   createAuthenticatedSession,
-  waitFor
+  waitFor,
 };

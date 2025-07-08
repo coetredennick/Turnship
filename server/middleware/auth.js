@@ -1,14 +1,15 @@
 const { google } = require('googleapis');
 const { getUserTokens, updateUserTokens } = require('../db/connection');
+const { createOAuth2Client } = require('../services/oauth');
 
 const requireAuth = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
       error: 'Authentication required',
-      code: 'AUTH_REQUIRED'
+      message: 'Please log in to access this resource',
     });
   }
-  next();
+  return next();
 };
 
 const optionalAuth = (req, res, next) => {
@@ -21,54 +22,55 @@ const refreshTokenIfNeeded = async (req, res, next) => {
   }
 
   try {
-    const tokens = await getUserTokens(req.user.id);
-    if (!tokens || !tokens.refresh_token) {
+    const userId = req.user.id;
+    const tokens = await getUserTokens(userId);
+
+    if (!tokens || !tokens.accessToken) {
+      req.user.needsReauth = true;
       return next();
     }
 
-    const tokenExpiry = new Date(tokens.token_expiry);
     const now = new Date();
-    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    const expiresAt = new Date(tokens.expiresAt);
+    const fiveMinutesFromNow = new Date(now.getTime() + (5 * 60 * 1000));
 
-    if (tokenExpiry <= fiveMinutesFromNow) {
-      console.log('Refreshing token for user:', req.user.id);
-      
-      // Check if OAuth credentials are configured
-      if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-        console.log('OAuth credentials not configured, skipping token refresh');
+    if (expiresAt <= fiveMinutesFromNow) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Token expires soon, attempting refresh...');
+      }
+
+      if (!tokens.refreshToken) {
+        req.user.needsReauth = true;
         return next();
       }
-      
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
-      );
-
-      oauth2Client.setCredentials({
-        refresh_token: tokens.refresh_token
-      });
 
       try {
+        const oauth2Client = createOAuth2Client();
+        oauth2Client.setCredentials({
+          refresh_token: tokens.refreshToken,
+        });
+
         const { credentials } = await oauth2Client.refreshAccessToken();
-        
-        await updateUserTokens(
-          req.user.id,
-          credentials.access_token,
-          credentials.refresh_token || tokens.refresh_token,
-          new Date(credentials.expiry_date).toISOString(),
-          tokens.scope
-        );
-        console.log('Token refreshed successfully for user:', req.user.id);
+        await updateUserTokens(userId, {
+          access_token: credentials.access_token,
+          refresh_token: credentials.refresh_token || tokens.refreshToken,
+          token_expiry: credentials.expiry_date,
+        });
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Token refreshed successfully');
+        }
       } catch (refreshError) {
-        console.error('Failed to refresh token:', refreshError);
+        console.error('Token refresh failed:', refreshError);
+        req.user.needsReauth = true;
       }
     }
-  } catch (error) {
-    console.error('Error in refreshTokenIfNeeded:', error);
-  }
 
-  next();
+    return next();
+  } catch (error) {
+    console.error('Error in token refresh middleware:', error);
+    return next();
+  }
 };
 
 const createGoogleAuthClient = async (userId) => {
@@ -80,12 +82,12 @@ const createGoogleAuthClient = async (userId) => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    process.env.GOOGLE_REDIRECT_URI,
   );
 
   oauth2Client.setCredentials({
     access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token
+    refresh_token: tokens.refresh_token,
   });
 
   return oauth2Client;
@@ -95,5 +97,5 @@ module.exports = {
   requireAuth,
   optionalAuth,
   refreshTokenIfNeeded,
-  createGoogleAuthClient
+  createGoogleAuthClient,
 };
