@@ -1,7 +1,5 @@
 const request = require('supertest');
 const express = require('express');
-const session = require('express-session');
-const passport = require('passport');
 const authRoutes = require('../routes/auth');
 
 // Mock external dependencies properly
@@ -125,7 +123,7 @@ describe('Auth Routes Integration Tests', () => {
         next();
       });
 
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
     });
 
     it('should return 500 when OAuth credentials are missing', async () => {
@@ -160,7 +158,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = null;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/me')
@@ -175,7 +173,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/me')
@@ -205,7 +203,7 @@ describe('Auth Routes Integration Tests', () => {
         next();
       });
 
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .post('/auth/logout')
@@ -227,7 +225,7 @@ describe('Auth Routes Integration Tests', () => {
         next();
       });
 
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .post('/auth/logout')
@@ -249,7 +247,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = null;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -267,7 +265,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -285,7 +283,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -315,7 +313,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -336,7 +334,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -355,7 +353,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -377,7 +375,7 @@ describe('Auth Routes Integration Tests', () => {
         req.user = testUser;
         next();
       });
-      app.use('/auth', require('../routes/auth'));
+      app.use('/auth', authRoutes);
 
       const response = await request(app)
         .get('/auth/gmail/test')
@@ -399,12 +397,12 @@ describe('Auth Routes Integration Tests', () => {
       const app1 = express();
       app1.use(express.json());
       app1.use((req, res, next) => { req.user = user1; next(); });
-      app1.use('/auth', require('../routes/auth'));
+      app1.use('/auth', authRoutes);
 
       const app2 = express();
       app2.use(express.json());
       app2.use((req, res, next) => { req.user = user2; next(); });
-      app2.use('/auth', require('../routes/auth'));
+      app2.use('/auth', authRoutes);
 
       // Both should be able to access their profiles
       const response1 = await request(app1).get('/auth/me').expect(200);

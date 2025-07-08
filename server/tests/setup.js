@@ -1,5 +1,3 @@
-const path = require('path');
-
 // Set test environment variables
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = ':memory:'; // Use in-memory SQLite for tests
@@ -28,7 +26,7 @@ afterEach(() => {
 // Global cleanup
 afterAll(async () => {
   // Close any open database connections
-  if (global.__db) {
-    await global.__db.close();
+  if (global.testDb) {
+    await global.testDb.close();
   }
 });

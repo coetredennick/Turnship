@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not needed with JSX runtime
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from './AuthContext';
 import { authAPI, handleAPIError } from '../services/api';
@@ -250,10 +250,9 @@ describe('AuthContext', () => {
         expect(screen.getByTestId('authenticated')).toHaveTextContent('true');
       });
 
-      let result;
       await act(async () => {
         const testGmailBtn = screen.getByTestId('test-gmail-btn');
-        result = await testGmailBtn.click();
+        await testGmailBtn.click();
       });
 
       expect(authAPI.testGmail).toHaveBeenCalled();

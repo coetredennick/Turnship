@@ -68,8 +68,15 @@ const createTestTokens = async (db, userId, tokenData = {}) => {
   };
 
   await db.runAsync(
-    'INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)',
-    [userId, defaultTokens.access_token, defaultTokens.refresh_token, defaultTokens.token_expiry, defaultTokens.scope],
+    `INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) 
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      userId,
+      defaultTokens.access_token,
+      defaultTokens.refresh_token,
+      defaultTokens.token_expiry,
+      defaultTokens.scope,
+    ],
   );
 
   return defaultTokens;
@@ -113,7 +120,9 @@ const createAuthenticatedSession = (agent, user) => {
 };
 
 // Wait for async operations
-const waitFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const waitFor = (ms) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
 
 module.exports = {
   createTestDatabase,
