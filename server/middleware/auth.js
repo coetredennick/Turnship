@@ -31,7 +31,7 @@ const refreshTokenIfNeeded = async (req, res, next) => {
     }
 
     const now = new Date();
-    const expiresAt = new Date(tokens.expiresAt);
+    const expiresAt = new Date(tokens.tokenExpiry);
     const fiveMinutesFromNow = new Date(now.getTime() + (5 * 60 * 1000));
 
     if (expiresAt <= fiveMinutesFromNow) {
