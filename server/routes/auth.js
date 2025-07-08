@@ -5,6 +5,7 @@ const { requireAuth } = require('../middleware/auth');
 const { getUserTokens } = require('../db/connection');
 
 const router = express.Router();
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 // Initiate Google OAuth
 router.get('/google', (req, res, next) => passport.authenticate('google', {
@@ -18,25 +19,25 @@ router.get('/google', (req, res, next) => passport.authenticate('google', {
 
 // Handle OAuth callback
 router.get('/google/callback', (req, res, next) => passport.authenticate('google', {
-  failureRedirect: '/?error=oauth_failed',
+  failureRedirect: `${CLIENT_URL}/?error=oauth_failed`,
 }, async (authErr, user) => {
   if (authErr) {
     console.error('OAuth authentication error:', authErr);
-    return res.redirect('/?error=oauth_error');
+    return res.redirect(`${CLIENT_URL}/?error=oauth_error`);
   }
 
   if (!user) {
     console.error('No user returned from OAuth');
-    return res.redirect('/?error=oauth_denied');
+    return res.redirect(`${CLIENT_URL}/?error=oauth_denied`);
   }
 
   return req.logIn(user, (loginErr) => {
     if (loginErr) {
       console.error('Login error:', loginErr);
-      return res.redirect('/?error=session_error');
+      return res.redirect(`${CLIENT_URL}/?error=session_error`);
     }
 
-    return res.redirect('/');
+    return res.redirect(`${CLIENT_URL}/dashboard`);
   });
 })(req, res, next));
 
