@@ -119,12 +119,14 @@ router.get('/health', (req, res) => res.json({
 }));
 
 // Error handling middleware for auth routes
-router.use((err, req, res) => {
+router.use((err, req, res, next) => {
   console.error('Auth route error:', err);
-  return res.status(500).json({
+  res.status(500).json({
     error: 'Authentication service error',
     message: 'An error occurred in the authentication service',
   });
+
+  return next(err);
 });
 
 module.exports = router;
