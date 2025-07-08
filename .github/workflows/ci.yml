@@ -27,12 +27,6 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Install server dependencies
-      run: npm ci --workspace=server
-
-    - name: Install client dependencies  
-      run: npm ci --workspace=client
-
     - name: Lint code
       run: npm run lint
 
@@ -107,12 +101,6 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Install server dependencies
-      run: npm ci --workspace=server
-
-    - name: Install client dependencies
-      run: npm ci --workspace=client
-
     - name: Build client for production
       run: npm run build --workspace=client
       env:
@@ -149,7 +137,7 @@ jobs:
         cache: 'npm'
 
     - name: Install dependencies
-      run: npm ci && npm ci --workspace=server && npm ci --workspace=client
+      run: npm ci
 
     - name: Build client
       run: npm run build --workspace=client
