@@ -70,6 +70,7 @@ const initDB = () => new Promise((resolve, reject) => {
       scope TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id),
       FOREIGN KEY (user_id) REFERENCES users(id)
     )`, (err) => {
       if (err) {
@@ -131,20 +132,34 @@ const updateUserTokens = (userId, tokens) => {
     access_token: accessToken,
     refresh_token: refreshToken,
     token_expiry: tokenExpiry,
+    scope,
   } = tokens;
 
-  const updateQuery = `
-    UPDATE oauth_tokens
-    SET access_token = ?, refresh_token = ?, token_expiry = ?, updated_at = ?
-    WHERE user_id = ?
+  const upsertQuery = `
+    INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      access_token=excluded.access_token,
+      refresh_token=excluded.refresh_token,
+      token_expiry=excluded.token_expiry,
+      scope=excluded.scope,
+      updated_at=excluded.updated_at
   `;
 
+  const timestamp = Date.now();
+
   return new Promise((resolve, reject) => {
-    db.run(updateQuery, [
-      accessToken, refreshToken, tokenExpiry, Date.now(), userId,
+    db.run(upsertQuery, [
+      userId,
+      accessToken,
+      refreshToken,
+      tokenExpiry,
+      scope,
+      timestamp,
+      timestamp,
     ], (err) => {
       if (err) {
-        console.error('Error updating user tokens:', err);
+        console.error('Error upserting user tokens:', err);
         return reject(err);
       }
 
