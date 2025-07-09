@@ -1,11 +1,15 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authAPI, handleAPIError } from '../services/api';
 
-// Initial auth state
+// DEVELOPMENT MODE: Mock authenticated user
 const initialState = {
-  user: null,
-  authenticated: false,
-  loading: true,
+  user: {
+    id: 1,
+    email: 'coetredfsu@gmail.com',
+    name: 'Dev User'
+  },
+  authenticated: true,
+  loading: false,
   error: null
 };
 
@@ -67,39 +71,10 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Check authentication status
+  // DEVELOPMENT MODE: Mock auth check - always return authenticated
   const checkAuth = async () => {
-    try {
-      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
-      
-      const response = await authAPI.checkAuth();
-      
-      if (response.data && response.data.user) {
-        dispatch({ 
-          type: AUTH_ACTIONS.SET_USER, 
-          payload: {
-            id: response.data.user.id,
-            email: response.data.user.email,
-            name: response.data.user.username,
-            picture: response.data.user.picture || null
-          }
-        });
-      } else {
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Auth check failed:', error);
-      }
-      
-      // Don't treat 401 as an error - user just isn't authenticated
-      if (error.response?.status === 401) {
-        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
-      } else {
-        const errorMessage = handleAPIError(error, 'Failed to check authentication status');
-        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      }
-    }
+    // Skip API call in development
+    console.log('Development mode: Auth check bypassed');
   };
 
   // Login function (redirects to OAuth)

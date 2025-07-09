@@ -3,6 +3,7 @@ const passport = require('passport');
 const { google } = require('googleapis');
 const { requireAuth } = require('../middleware/auth');
 const { getUserTokens } = require('../db/connection');
+const GmailDevService = require('../services/gmail-dev');
 
 const router = express.Router();
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
@@ -77,38 +78,18 @@ router.post('/logout', (req, res) => req.logout((logoutErr) => {
   });
 }));
 
-// Test Gmail connection
-router.get('/gmail/test', requireAuth, async (req, res) => {
+// DEVELOPMENT: Test Gmail connection with hardcoded tokens
+router.get('/gmail/test', async (req, res) => {
   try {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI,
-    );
-
-    // Set credentials from user's stored tokens
-    const tokens = await getUserTokens(req.user.id);
-    if (!tokens) {
-      return res.status(401).json({
-        error: 'No tokens found',
-        message: 'Please re-authenticate with Google',
-      });
-    }
-
-    oauth2Client.setCredentials({
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-    });
-
-    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-
+    const gmailService = new GmailDevService();
+    const profile = await gmailService.getProfile();
+    
     return res.json({
       message: 'Gmail API connection successful',
       profile: {
-        emailAddress: profile.data.emailAddress,
-        messagesTotal: profile.data.messagesTotal,
-        threadsTotal: profile.data.threadsTotal,
+        emailAddress: profile.emailAddress,
+        messagesTotal: profile.messagesTotal,
+        threadsTotal: profile.threadsTotal,
       },
     });
   } catch (error) {
@@ -116,7 +97,44 @@ router.get('/gmail/test', requireAuth, async (req, res) => {
     return res.status(500).json({
       error: 'Gmail connection failed',
       message: error.message || 'Failed to connect to Gmail API',
-      needsReauth: error.code === 401 || error.code === 403,
+    });
+  }
+});
+
+// DEVELOPMENT: Get recent emails
+router.get('/gmail/messages', async (req, res) => {
+  try {
+    const gmailService = new GmailDevService();
+    const messages = await gmailService.listMessages('', 10);
+    
+    return res.json({
+      messages: messages.messages || [],
+      resultSizeEstimate: messages.resultSizeEstimate || 0,
+    });
+  } catch (error) {
+    console.error('Gmail messages error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch messages',
+      message: error.message,
+    });
+  }
+});
+
+// DEVELOPMENT: Search networking emails
+router.get('/gmail/networking', async (req, res) => {
+  try {
+    const gmailService = new GmailDevService();
+    const results = await gmailService.searchNetworkingEmails();
+    
+    return res.json({
+      message: 'Networking emails retrieved',
+      results: results.messages || [],
+    });
+  } catch (error) {
+    console.error('Gmail networking search error:', error);
+    return res.status(500).json({
+      error: 'Failed to search networking emails',
+      message: error.message,
     });
   }
 });
