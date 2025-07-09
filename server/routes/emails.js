@@ -22,12 +22,12 @@ const validateEmailGenerationRequest = (data) => {
     errors.push('All connection IDs must be positive integers');
   }
   
-  const validPurposes = ['informational-interview', 'job-inquiry', 'industry-insights', 'follow-up', 'introduction'];
+  const validPurposes = ['summer-internship', 'just-reaching-out', 'advice', 'informational-interview', 'job-inquiry', 'industry-insights', 'follow-up', 'introduction'];
   if (!data.purpose || !validPurposes.includes(data.purpose)) {
     errors.push(`Purpose is required and must be one of: ${validPurposes.join(', ')}`);
   }
   
-  const validTones = ['casual', 'professional', 'formal'];
+  const validTones = ['enthusiastic', 'respectful', 'confident', 'casual', 'professional', 'formal'];
   if (!data.tone || !validTones.includes(data.tone)) {
     errors.push(`Tone is required and must be one of: ${validTones.join(', ')}`);
   }
@@ -89,6 +89,14 @@ const generateEmailContent = async (connections, purpose, tone, length) => {
 
 // Fallback function for basic email templates
 const generateFallbackEmails = (connections, purpose, tone, length) => {
+  // Map college-friendly purposes to template keys
+  const purposeMapping = {
+    'summer-internship': 'job-inquiry',
+    'just-reaching-out': 'introduction',
+    'advice': 'industry-insights'
+  };
+  const templatePurpose = purposeMapping[purpose] || purpose;
+  
   const emailTemplates = {
     'informational-interview': {
       subject: 'Informational Interview Request',
@@ -163,9 +171,9 @@ Amy Chen`
     }
   };
   
-  const template = emailTemplates[purpose];
+  const template = emailTemplates[templatePurpose];
   if (!template) {
-    throw new Error(`No template found for purpose: ${purpose}`);
+    throw new Error(`No template found for purpose: ${purpose} (mapped to ${templatePurpose})`);
   }
   
   // Generate personalized emails for each connection

@@ -103,16 +103,55 @@ const initDB = () => new Promise((resolve, reject) => {
         console.error('Error creating connections table:', err.message);
         reject(err);
       } else {
-        // Add migration logic for existing tables
-        addEmailTrackingColumns()
+        // Add indexes for performance optimization
+        addConnectionIndexes()
           .then(() => {
-            console.log('Database initialized');
-            resolve();
+            // Add migration logic for existing tables
+            addEmailTrackingColumns()
+              .then(() => {
+                console.log('Database initialized');
+                resolve();
+              })
+              .catch(migrationErr => {
+                console.error('Migration error:', migrationErr.message);
+                reject(migrationErr);
+              });
           })
-          .catch(migrationErr => {
-            console.error('Migration error:', migrationErr.message);
-            reject(migrationErr);
+          .catch(indexErr => {
+            console.error('Index creation error:', indexErr.message);
+            reject(indexErr);
           });
+      }
+    });
+  });
+});
+
+// Function to add performance indexes to connections table
+const addConnectionIndexes = () => new Promise((resolve, reject) => {
+  const indexQueries = [
+    'CREATE INDEX IF NOT EXISTS idx_connections_user_id ON connections(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_connections_email_status ON connections(email_status)',
+    'CREATE INDEX IF NOT EXISTS idx_connections_created_at ON connections(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_connections_email ON connections(email)'
+  ];
+
+  let completed = 0;
+  let hasError = false;
+
+  indexQueries.forEach((query, index) => {
+    db.run(query, (err) => {
+      if (err) {
+        if (!hasError) {
+          hasError = true;
+          console.error(`Index creation error on query ${index + 1}:`, err.message);
+          reject(err);
+        }
+      } else {
+        completed++;
+        if (completed === indexQueries.length) {
+          console.log('Database indexes created successfully');
+          resolve();
+        }
       }
     });
   });

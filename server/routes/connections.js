@@ -30,24 +30,48 @@ const validateConnectionData = (data, isUpdate = false) => {
     errors.push('Full name must be a string');
   }
   
+  if (data.full_name && (data.full_name.length < 2 || data.full_name.length > 100)) {
+    errors.push('Full name must be between 2 and 100 characters');
+  }
+  
   if (data.company && typeof data.company !== 'string') {
     errors.push('Company must be a string');
+  }
+  
+  if (data.company && data.company.length > 100) {
+    errors.push('Company name must not exceed 100 characters');
   }
   
   if (data.connection_type && typeof data.connection_type !== 'string') {
     errors.push('Connection type must be a string');
   }
   
+  if (data.connection_type && data.connection_type.length > 50) {
+    errors.push('Connection type must not exceed 50 characters');
+  }
+  
   if (data.job_title && typeof data.job_title !== 'string') {
     errors.push('Job title must be a string');
+  }
+  
+  if (data.job_title && data.job_title.length > 100) {
+    errors.push('Job title must not exceed 100 characters');
   }
   
   if (data.industry && typeof data.industry !== 'string') {
     errors.push('Industry must be a string');
   }
   
+  if (data.industry && data.industry.length > 100) {
+    errors.push('Industry must not exceed 100 characters');
+  }
+  
   if (data.notes && typeof data.notes !== 'string') {
     errors.push('Notes must be a string');
+  }
+  
+  if (data.notes && data.notes.length > 1000) {
+    errors.push('Notes must not exceed 1000 characters');
   }
   
   // Validate email status if provided
@@ -68,6 +92,24 @@ const validateConnectionData = (data, isUpdate = false) => {
     if (!validStatuses.includes(data.email_status)) {
       errors.push('Invalid email status');
     }
+  }
+  
+  // Validate custom_connection_description if provided
+  if (data.custom_connection_description && typeof data.custom_connection_description !== 'string') {
+    errors.push('Custom connection description must be a string');
+  }
+  
+  if (data.custom_connection_description && data.custom_connection_description.length > 500) {
+    errors.push('Custom connection description must not exceed 500 characters');
+  }
+  
+  // Validate last_email_draft if provided
+  if (data.last_email_draft && typeof data.last_email_draft !== 'string') {
+    errors.push('Last email draft must be a string');
+  }
+  
+  if (data.last_email_draft && data.last_email_draft.length > 10000) {
+    errors.push('Last email draft must not exceed 10000 characters');
   }
   
   // Validate last_email_sent_date if provided

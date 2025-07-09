@@ -202,9 +202,37 @@ const adjustContentLength = (content, length) => {
   }
 };
 
+// Helper function to map college-friendly options to AI service options
+const mapCollegePurposeToAI = (purpose) => {
+  const mapping = {
+    'summer-internship': 'job-inquiry',
+    'just-reaching-out': 'introduction', 
+    'advice': 'industry-insights'
+  };
+  
+  return mapping[purpose] || purpose;
+};
+
+const mapCollegeToneToAI = (tone) => {
+  const mapping = {
+    'enthusiastic': 'professional',
+    'respectful': 'formal',
+    'confident': 'professional'
+  };
+  
+  return mapping[tone] || tone;
+};
+
 // Helper function to adjust tone
 const adjustTone = (content, tone) => {
+  // Map college-friendly tones to descriptions
   switch (tone) {
+    case 'enthusiastic':
+      return content + '\n\nUse an enthusiastic, energetic tone that shows genuine excitement while maintaining professionalism.';
+    case 'respectful':
+      return content + '\n\nUse a respectful, formal tone that shows proper deference and courtesy.';
+    case 'confident':
+      return content + '\n\nUse a confident, assertive tone that demonstrates self-assurance while remaining professional.';
     case 'casual':
       return content + '\n\nUse a friendly, conversational tone while maintaining professionalism.';
     case 'formal':
@@ -212,6 +240,38 @@ const adjustTone = (content, tone) => {
     case 'professional':
     default:
       return content + '\n\nUse a professional but approachable tone.';
+  }
+};
+
+// Retry wrapper function with exponential backoff for OpenAI API calls
+const retryWithBackoff = async (fn, maxRetries = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      // Don't retry on authentication or invalid request errors
+      if (error.status === 401 || error.status === 400) {
+        console.log(`OpenAI API error (no retry): ${error.status} - ${error.message}`);
+        throw error;
+      }
+      
+      // Don't retry on insufficient quota (billing issue)
+      if (error.code === 'insufficient_quota' || error.code === 'invalid_api_key') {
+        console.log(`OpenAI API error (no retry): ${error.code} - ${error.message}`);
+        throw error;
+      }
+      
+      // Don't retry on the last attempt
+      if (attempt === maxRetries) {
+        console.log(`OpenAI API failed after ${maxRetries} attempts: ${error.message}`);
+        throw error;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt - 1) * 1000;
+      console.log(`OpenAI API attempt ${attempt} failed, retrying in ${delay}ms... Error: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 };
 
@@ -227,36 +287,43 @@ const generateNetworkingEmail = async (connectionData, userProfile = DEFAULT_USE
       throw new Error('Options must include purpose, tone, and length');
     }
 
+    // Map college-friendly options to AI service options
+    const aiPurpose = mapCollegePurposeToAI(options.purpose);
+    const aiTone = mapCollegeToneToAI(options.tone);
+    
     // Get purpose-specific prompt
-    const purposeConfig = PURPOSE_PROMPTS[options.purpose];
+    const purposeConfig = PURPOSE_PROMPTS[aiPurpose];
     if (!purposeConfig) {
-      throw new Error(`Unsupported purpose: ${options.purpose}`);
+      throw new Error(`Unsupported purpose: ${options.purpose} (mapped to ${aiPurpose})`);
     }
 
-    // Generate the prompt
-    let prompt = purposeConfig.template(connectionData, userProfile, options);
+    // Generate the prompt with mapped options
+    const mappedOptions = { ...options, purpose: aiPurpose, tone: aiTone };
+    let prompt = purposeConfig.template(connectionData, userProfile, mappedOptions);
     
-    // Adjust for length and tone
+    // Adjust for length and tone (use original options for tone descriptions)
     prompt = adjustContentLength(prompt, options.length);
     prompt = adjustTone(prompt, options.tone);
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: purposeConfig.instruction
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 1000,
-      temperature: 0.7, // Balanced creativity and consistency
-      presence_penalty: 0.1, // Slight penalty for repetition
-      frequency_penalty: 0.1 // Slight penalty for common phrases
+    // Call OpenAI API with retry logic
+    const completion = await retryWithBackoff(async () => {
+      return await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: purposeConfig.instruction
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7, // Balanced creativity and consistency
+        presence_penalty: 0.1, // Slight penalty for repetition
+        frequency_penalty: 0.1 // Slight penalty for common phrases
+      });
     });
 
     const generatedContent = completion.choices[0].message.content.trim();
@@ -301,6 +368,11 @@ const generateNetworkingEmail = async (connectionData, userProfile = DEFAULT_USE
       throw new Error('Invalid OpenAI API key. Please check your configuration.');
     } else if (error.code === 'rate_limit_exceeded') {
       throw new Error('OpenAI API rate limit exceeded. Please try again later.');
+    }
+    
+    // Add context about retry attempts for network or temporary errors
+    if (error.status >= 500 || error.code === 'network_error' || error.code === 'timeout') {
+      throw new Error(`Failed to generate email after retry attempts: ${error.message}`);
     }
     
     throw new Error(`Failed to generate email: ${error.message}`);
