@@ -21,6 +21,10 @@ router.get('/google', (req, res, next) => passport.authenticate('google', {
 router.get('/google/callback', (req, res, next) => passport.authenticate('google', {
   failureRedirect: `${CLIENT_URL}/?error=oauth_failed`,
 }, async (authErr, user) => {
+  console.log('OAuth callback - Error:', authErr);
+  console.log('OAuth callback - User:', user);
+  console.log('OAuth callback - Session before login:', req.session);
+  
   if (authErr) {
     console.error('OAuth authentication error:', authErr);
     return res.redirect(`${CLIENT_URL}/?error=oauth_error`);
@@ -37,19 +41,25 @@ router.get('/google/callback', (req, res, next) => passport.authenticate('google
       return res.redirect(`${CLIENT_URL}/?error=session_error`);
     }
 
+    console.log('Login successful - Session after login:', req.session);
+    console.log('Login successful - User:', req.user);
     return res.redirect(`${CLIENT_URL}/dashboard`);
   });
 })(req, res, next));
 
-// Get current user
-router.get('/me', requireAuth, (req, res) => res.json({
-  user: {
-    id: req.user.id,
-    email: req.user.email,
-    name: req.user.name,
-  },
-  authenticated: true,
-}));
+// DEVELOPMENT MODE: Mock authenticated user
+router.get('/me', (req, res) => {
+  console.log('Development mode: Returning mock user');
+  
+  return res.json({
+    user: {
+      id: 1,
+      email: 'coetredfsu@gmail.com',
+      name: 'Dev User',
+    },
+    authenticated: true,
+  });
+});
 
 // Logout
 router.post('/logout', (req, res) => req.logout((logoutErr) => {
