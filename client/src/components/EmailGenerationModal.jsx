@@ -5,8 +5,8 @@ import { emailsAPI, handleAPIError } from '../services/api';
 const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenerated }) => {
   const [selectedConnections, setSelectedConnections] = useState([]);
   const [options, setOptions] = useState({
-    purpose: 'informational-interview',
-    tone: 'professional',
+    purpose: 'summer-internship',
+    tone: 'respectful',
     length: 'medium'
   });
   const [isGenerating, setIsGenerating] = useState(false);
@@ -251,11 +251,9 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
                     onChange={(e) => setOptions(prev => ({ ...prev, purpose: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="informational-interview">Informational Interview</option>
-                    <option value="job-inquiry">Job Inquiry</option>
-                    <option value="industry-insights">Industry Insights</option>
-                    <option value="follow-up">Follow-up</option>
-                    <option value="introduction">Introduction</option>
+                    <option value="summer-internship">Summer Internship</option>
+                    <option value="just-reaching-out">Just Reaching Out</option>
+                    <option value="advice">Advice</option>
                   </select>
                 </div>
 
@@ -269,9 +267,10 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
                     onChange={(e) => setOptions(prev => ({ ...prev, tone: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
+                    <option value="enthusiastic">Enthusiastic</option>
+                    <option value="respectful">Respectful</option>
+                    <option value="confident">Confident</option>
                     <option value="casual">Casual</option>
-                    <option value="professional">Professional</option>
-                    <option value="formal">Formal</option>
                   </select>
                 </div>
 
