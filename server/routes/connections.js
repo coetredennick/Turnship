@@ -50,6 +50,33 @@ const validateConnectionData = (data, isUpdate = false) => {
     errors.push('Notes must be a string');
   }
   
+  // Validate email status if provided
+  if (data.email_status) {
+    const validStatuses = [
+      'Not Contacted',
+      'First Impression (draft)',
+      'First Impression (sent)',
+      'First Impression (nr)',
+      'Follow-up (draft)', 
+      'Follow-up (sent)',
+      'Responded - Positive',
+      'Responded - Negative',
+      'Responded - Neutral',
+      'Meeting Scheduled'
+    ];
+    
+    if (!validStatuses.includes(data.email_status)) {
+      errors.push('Invalid email status');
+    }
+  }
+  
+  // Validate last_email_sent_date if provided
+  if (data.last_email_sent_date !== undefined && data.last_email_sent_date !== null) {
+    if (typeof data.last_email_sent_date !== 'number' && typeof data.last_email_sent_date !== 'string') {
+      errors.push('Last email sent date must be a valid timestamp');
+    }
+  }
+  
   return errors;
 };
 

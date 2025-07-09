@@ -47,10 +47,11 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
     }
   };
 
-  // Check if connection should be disabled
+  // Check if connection should be disabled (removed restriction)
   const isConnectionDisabled = (connection) => {
-    const recentStatuses = ['First Impression (draft)', 'First Impression (sent)', 'Follow-up (draft)', 'Follow-up (sent)'];
-    return recentStatuses.includes(connection.email_status);
+    // Allow email generation for all connections regardless of status
+    // Users can now generate follow-ups, responses, and emails for any status
+    return false;
   };
 
   // Handle connection selection
@@ -228,11 +229,6 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
                                 }`}>
                                   {connection.email_status || 'Not Contacted'}
                                 </span>
-                                {isDisabled && (
-                                  <span className="text-xs text-gray-500">
-                                    (Recently contacted)
-                                  </span>
-                                )}
                               </div>
                             </div>
                           </div>

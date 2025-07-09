@@ -355,7 +355,7 @@ const updateConnection = (connectionId, updates) => new Promise((resolve, reject
   const allowedFields = [
     'email', 'full_name', 'company', 'connection_type', 
     'job_title', 'industry', 'notes', 'status', 'email_status',
-    'custom_connection_description'
+    'custom_connection_description', 'last_email_sent_date'
   ];
   
   const updateFields = [];

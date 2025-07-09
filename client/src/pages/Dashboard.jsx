@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { InlineLoading } from '../components/Loading';
 import AddConnectionForm from '../components/AddConnectionForm';
 import EmailGenerationModal from '../components/EmailGenerationModal';
-import EmailComposer from '../components/EmailComposer';
+import EmailComposer, { ConnectionSelectorModal, DraftBankModal } from '../components/EmailComposer';
 import StatusBadge from '../components/StatusBadge';
-import { connectionsAPI, handleAPIError } from '../services/api';
+import { InlineLoading } from '../components/Loading';
+import { connectionsAPI, authAPI, handleAPIError } from '../services/api';
 
 const Dashboard = () => {
   const { user, logout, testGmailConnection, loading } = useAuth();
-  const [gmailStatus, setGmailStatus] = useState(null);
+  const [selectedConnection, setSelectedConnection] = useState(null);
+  const [generatedEmailForComposer, setGeneratedEmailForComposer] = useState(null);
+  const [showContactDropdown, setShowContactDropdown] = useState(false);
+  const [showConnectionSelector, setShowConnectionSelector] = useState(false);
+  const [showDraftBank, setShowDraftBank] = useState(false);
+  const [loadExistingDraft, setLoadExistingDraft] = useState(true);
+
+  // Gmail testing state
   const [testingGmail, setTestingGmail] = useState(false);
+  const [gmailStatus, setGmailStatus] = useState(null);
   
   // Connections state
   const [connections, setConnections] = useState([]);
@@ -24,8 +32,6 @@ const Dashboard = () => {
   
   // Email composer state
   const [showEmailComposer, setShowEmailComposer] = useState(false);
-  const [selectedConnection, setSelectedConnection] = useState(null);
-  const [generatedEmailForComposer, setGeneratedEmailForComposer] = useState(null);
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -48,6 +54,20 @@ const Dashboard = () => {
   useEffect(() => {
     loadConnections();
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showContactDropdown && !event.target.closest('.contact-dropdown-container')) {
+        setShowContactDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showContactDropdown]);
 
   // Load connections function
   const loadConnections = async () => {
@@ -109,17 +129,11 @@ const Dashboard = () => {
       if (connection) {
         setSelectedConnection(connection);
         setGeneratedEmailForComposer(email);
+        setLoadExistingDraft(false); // Use generated content, don't load existing draft
         setShowEmailModal(false);
         setShowEmailComposer(true);
       }
     }
-  };
-  
-  // Handle opening email composer
-  const handleOpenEmailComposer = (connection) => {
-    setSelectedConnection(connection);
-    setGeneratedEmailForComposer(null);
-    setShowEmailComposer(true);
   };
   
   // Handle email sent
@@ -134,6 +148,46 @@ const Dashboard = () => {
     // Refresh connections to update email statuses
     loadConnections();
     console.log('Draft saved for connection:', connectionId);
+  };
+
+  // Handle manual status change
+  const handleStatusChange = async (connectionId, newStatus) => {
+    try {
+      await connectionsAPI.updateConnection(connectionId, { 
+        email_status: newStatus,
+        last_email_sent_date: newStatus.includes('(sent)') ? Date.now() : null 
+      });
+      // Refresh connections to show updated status
+      loadConnections();
+    } catch (error) {
+      const errorMessage = handleAPIError(error, 'Failed to update status');
+      setConnectionsError(errorMessage);
+    }
+  };
+
+  // Handle manual email connection selection
+  const handleManualEmailConnection = (connection) => {
+    setSelectedConnection(connection);
+    setGeneratedEmailForComposer(null); // No AI content, blank draft
+    setLoadExistingDraft(false); // Start with blank email for manual composition
+    setShowConnectionSelector(false);
+    setShowEmailComposer(true);
+  };
+
+  // Handle draft bank selection
+  const handleDraftSelected = (connection) => {
+    setSelectedConnection(connection);
+    setGeneratedEmailForComposer(null); // Load existing draft
+    setLoadExistingDraft(true); // Load existing draft for editing
+    setShowDraftBank(false);
+    setShowEmailComposer(true);
+  };
+
+  // Handle draft deletion
+  const handleDraftDeleted = (connectionId) => {
+    // Refresh connections to update draft status
+    loadConnections();
+    console.log('Draft deleted for connection:', connectionId);
   };
 
   const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
@@ -302,13 +356,75 @@ const Dashboard = () => {
         <div className="mb-8">
           <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <QuickActionCard
-              title="Contact"
-              description="Reach out to your connections"
-              icon="✨"
-              disabled={connections.length === 0}
-              onClick={() => setShowEmailModal(true)}
-            />
+            {/* Contact Dropdown */}
+            <div className="relative contact-dropdown-container">
+              <div 
+                className={`bg-white rounded-lg border border-gray-200 p-6 shadow-sm transition-all duration-200 ${
+                  connections.length === 0 
+                    ? 'opacity-60 cursor-not-allowed' 
+                    : 'hover:shadow-md cursor-pointer hover:border-blue-300'
+                }`}
+                onClick={connections.length === 0 ? undefined : () => setShowContactDropdown(!showContactDropdown)}
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-gray-100 rounded-full">
+                    <span className="text-xl">✨</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900">Contact</h3>
+                    <p className="text-sm text-gray-600">Reach out to your connections</p>
+                    {connections.length === 0 && (
+                      <span className="text-xs text-blue-600 font-medium">Add connections first</span>
+                    )}
+                  </div>
+                  {connections.length > 0 && (
+                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${showContactDropdown ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              
+              {/* Dropdown Menu */}
+              {showContactDropdown && connections.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg border border-gray-200 shadow-lg z-10">
+                  <div className="py-2">
+                    <button
+                      onClick={() => {
+                        setShowEmailModal(true);
+                        setShowContactDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="text-lg">🤖</span>
+                        <div>
+                          <p className="font-medium text-gray-900">Generate AI Email</p>
+                          <p className="text-sm text-gray-500">Let AI craft personalized messages</p>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Open connection selector for manual draft
+                        setShowConnectionSelector(true);
+                        setShowContactDropdown(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50 border-t border-gray-100"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="text-lg">✍️</span>
+                        <div>
+                          <p className="font-medium text-gray-900">Write Manual Email</p>
+                          <p className="text-sm text-gray-500">Compose your own message</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <QuickActionCard
               title="Add Connection"
               description="Log a new networking contact"
@@ -428,16 +544,21 @@ const Dashboard = () => {
                         <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
                           <div className="flex items-center space-x-2">
                             <span>Status:</span>
-                            <StatusBadge status={connection.email_status || 'Not Contacted'} />
+                            <StatusBadge 
+                              status={connection.email_status || 'Not Contacted'} 
+                              editable={true}
+                              onStatusChange={handleStatusChange}
+                              connectionId={connection.id}
+                            />
                           </div>
                           <span>Added: {new Date(connection.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => handleOpenEmailComposer(connection)}
+                          onClick={() => setShowDraftBank(true)}
                           className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
-                          title="Send email"
+                          title="Draft bank"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -509,6 +630,23 @@ const Dashboard = () => {
           onEmailGenerated={handleEmailGenerated}
         />
         
+        {/* Connection Selector Modal for Manual Emails */}
+        <ConnectionSelectorModal
+          isOpen={showConnectionSelector}
+          onClose={() => setShowConnectionSelector(false)}
+          connections={connections}
+          onConnectionSelected={handleManualEmailConnection}
+        />
+        
+        {/* Draft Bank Modal */}
+        <DraftBankModal
+          isOpen={showDraftBank}
+          onClose={() => setShowDraftBank(false)}
+          connections={connections}
+          onDraftSelected={handleDraftSelected}
+          onDraftDeleted={handleDraftDeleted}
+        />
+        
         {/* Email Composer Modal */}
         <EmailComposer
           isOpen={showEmailComposer}
@@ -517,6 +655,7 @@ const Dashboard = () => {
           initialEmail={generatedEmailForComposer}
           onEmailSent={handleEmailSent}
           onDraftSaved={handleDraftSaved}
+          loadExistingDraft={loadExistingDraft}
         />
       </main>
     </div>
