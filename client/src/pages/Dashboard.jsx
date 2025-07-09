@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { InlineLoading } from '../components/Loading';
+import AddConnectionForm from '../components/AddConnectionForm';
+import EmailGenerationModal from '../components/EmailGenerationModal';
+import EmailComposer from '../components/EmailComposer';
+import StatusBadge from '../components/StatusBadge';
+import { connectionsAPI, handleAPIError } from '../services/api';
 
 const Dashboard = () => {
   const { user, logout, testGmailConnection, loading } = useAuth();
   const [gmailStatus, setGmailStatus] = useState(null);
   const [testingGmail, setTestingGmail] = useState(false);
+  
+  // Connections state
+  const [connections, setConnections] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [loadingConnections, setLoadingConnections] = useState(false);
+  const [addingConnection, setAddingConnection] = useState(false);
+  const [connectionsError, setConnectionsError] = useState(null);
+  
+  // Email generation state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  
+  // Email composer state
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [selectedConnection, setSelectedConnection] = useState(null);
+  const [generatedEmailForComposer, setGeneratedEmailForComposer] = useState(null);
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -22,6 +42,98 @@ const Dashboard = () => {
     } finally {
       setTestingGmail(false);
     }
+  };
+
+  // Load connections on component mount
+  useEffect(() => {
+    loadConnections();
+  }, []);
+
+  // Load connections function
+  const loadConnections = async () => {
+    setLoadingConnections(true);
+    setConnectionsError(null);
+    try {
+      const response = await connectionsAPI.getConnections();
+      setConnections(response.data.connections || []);
+    } catch (error) {
+      const errorMessage = handleAPIError(error, 'Failed to load connections');
+      setConnectionsError(errorMessage);
+    } finally {
+      setLoadingConnections(false);
+    }
+  };
+
+  // Handle adding new connection
+  const handleAddConnection = async (connectionData) => {
+    setAddingConnection(true);
+    try {
+      const response = await connectionsAPI.createConnection(connectionData);
+      setConnections(prev => [response.data.connection, ...prev]);
+      setShowAddForm(false);
+      setConnectionsError(null);
+    } catch (error) {
+      const errorMessage = handleAPIError(error, 'Failed to add connection');
+      setConnectionsError(errorMessage);
+      throw error; // Re-throw to let form handle it
+    } finally {
+      setAddingConnection(false);
+    }
+  };
+
+  // Handle delete connection
+  const handleDeleteConnection = async (connectionId) => {
+    if (!window.confirm('Are you sure you want to delete this connection?')) {
+      return;
+    }
+    
+    try {
+      await connectionsAPI.deleteConnection(connectionId);
+      setConnections(prev => prev.filter(conn => conn.id !== connectionId));
+    } catch (error) {
+      const errorMessage = handleAPIError(error, 'Failed to delete connection');
+      setConnectionsError(errorMessage);
+    }
+  };
+
+  // Handle email generation
+  const handleEmailGenerated = (generatedEmails) => {
+    // Refresh connections to update email statuses
+    loadConnections();
+    console.log('Generated emails:', generatedEmails);
+    
+    // If only one email was generated, open it in the composer
+    if (generatedEmails.length === 1) {
+      const email = generatedEmails[0];
+      const connection = connections.find(c => c.id === email.connectionId);
+      if (connection) {
+        setSelectedConnection(connection);
+        setGeneratedEmailForComposer(email);
+        setShowEmailModal(false);
+        setShowEmailComposer(true);
+      }
+    }
+  };
+  
+  // Handle opening email composer
+  const handleOpenEmailComposer = (connection) => {
+    setSelectedConnection(connection);
+    setGeneratedEmailForComposer(null);
+    setShowEmailComposer(true);
+  };
+  
+  // Handle email sent
+  const handleEmailSent = (connectionId) => {
+    // Refresh connections to update email statuses
+    loadConnections();
+    console.log('Email sent for connection:', connectionId);
+  };
+  
+  // Handle draft saved
+  const handleDraftSaved = (connectionId) => {
+    // Refresh connections to update email statuses
+    loadConnections();
+    console.log('Draft saved for connection:', connectionId);
   };
 
   const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
@@ -164,8 +276,8 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard
               title="Recent Connections"
-              value="0"
-              subtitle="Start building your network"
+              value={connections.length.toString()}
+              subtitle={connections.length === 0 ? "Start building your network" : "Growing your network"}
               icon="👥"
               color="blue"
             />
@@ -191,16 +303,18 @@ const Dashboard = () => {
           <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <QuickActionCard
-              title="Generate Email"
-              description="AI-powered networking emails"
+              title="Contact"
+              description="Reach out to your connections"
               icon="✨"
-              disabled={true}
+              disabled={connections.length === 0}
+              onClick={() => setShowEmailModal(true)}
             />
             <QuickActionCard
               title="Add Connection"
               description="Log a new networking contact"
               icon="➕"
-              disabled={true}
+              disabled={false}
+              onClick={() => setShowAddForm(true)}
             />
             <QuickActionCard
               title="View Analytics"
@@ -208,6 +322,142 @@ const Dashboard = () => {
               icon="📊"
               disabled={true}
             />
+          </div>
+        </div>
+
+        {/* Connections Section */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-gray-900">My Connections</h2>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Add Connection
+            </button>
+          </div>
+
+          {/* Add Connection Form */}
+          {showAddForm && (
+            <div className="mb-6">
+              <AddConnectionForm
+                onSubmit={handleAddConnection}
+                onCancel={() => setShowAddForm(false)}
+                isLoading={addingConnection}
+              />
+            </div>
+          )}
+
+          {/* Connections Error */}
+          {connectionsError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700">❌ {connectionsError}</p>
+            </div>
+          )}
+
+          {/* Connections List */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            {loadingConnections ? (
+              <div className="p-8 text-center">
+                <InlineLoading size={24} className="mx-auto mb-2" />
+                <p className="text-gray-500">Loading connections...</p>
+              </div>
+            ) : connections.length === 0 ? (
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                  <span className="text-2xl">👥</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No connections yet</h3>
+                <p className="text-gray-500 mb-4">Start building your network by adding your first connection.</p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Add Your First Connection
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {connections.map((connection) => (
+                  <div key={connection.id} className="p-6 hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-600">
+                              {connection.full_name?.charAt(0) || '?'}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">{connection.full_name}</h4>
+                            <p className="text-sm text-gray-500">{connection.email}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                          {connection.company && (
+                            <div>
+                              <span className="font-medium text-gray-500">Company:</span>
+                              <span className="ml-1 text-gray-900">{connection.company}</span>
+                            </div>
+                          )}
+                          {connection.job_title && (
+                            <div>
+                              <span className="font-medium text-gray-500">Title:</span>
+                              <span className="ml-1 text-gray-900">{connection.job_title}</span>
+                            </div>
+                          )}
+                          {connection.industry && (
+                            <div>
+                              <span className="font-medium text-gray-500">Industry:</span>
+                              <span className="ml-1 text-gray-900">{connection.industry}</span>
+                            </div>
+                          )}
+                          {connection.connection_type && (
+                            <div>
+                              <span className="font-medium text-gray-500">Type:</span>
+                              <span className="ml-1 text-gray-900">{connection.connection_type}</span>
+                            </div>
+                          )}
+                        </div>
+                        {connection.notes && (
+                          <div className="mt-2">
+                            <span className="font-medium text-gray-500 text-sm">Notes:</span>
+                            <p className="text-sm text-gray-900 mt-1">{connection.notes}</p>
+                          </div>
+                        )}
+                        <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+                          <div className="flex items-center space-x-2">
+                            <span>Status:</span>
+                            <StatusBadge status={connection.email_status || 'Not Contacted'} />
+                          </div>
+                          <span>Added: {new Date(connection.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleOpenEmailComposer(connection)}
+                          className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
+                          title="Send email"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConnection(connection.id)}
+                          className="p-1 text-gray-400 hover:text-red-600 focus:outline-none"
+                          title="Delete connection"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -227,12 +477,16 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-gray-400 text-white rounded-full flex items-center justify-center text-sm font-bold">
+              <div className={`flex-shrink-0 w-6 h-6 ${connections.length > 0 ? 'bg-blue-600' : 'bg-gray-400'} text-white rounded-full flex items-center justify-center text-sm font-bold`}>
                 2
               </div>
               <div>
-                <p className="text-gray-600 font-medium">Add your first connection (Coming Soon)</p>
-                <p className="text-gray-500 text-sm">Start building your networking database</p>
+                <p className={`${connections.length > 0 ? 'text-blue-800' : 'text-gray-600'} font-medium`}>
+                  {connections.length > 0 ? 'Add your first connection ✓' : 'Add your first connection'}
+                </p>
+                <p className={`${connections.length > 0 ? 'text-blue-700' : 'text-gray-500'} text-sm`}>
+                  {connections.length > 0 ? 'Great start! Keep building your network' : 'Start building your networking database'}
+                </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
@@ -246,6 +500,24 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Email Generation Modal */}
+        <EmailGenerationModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          connections={connections}
+          onEmailGenerated={handleEmailGenerated}
+        />
+        
+        {/* Email Composer Modal */}
+        <EmailComposer
+          isOpen={showEmailComposer}
+          onClose={() => setShowEmailComposer(false)}
+          connection={selectedConnection}
+          initialEmail={generatedEmailForComposer}
+          onEmailSent={handleEmailSent}
+          onDraftSaved={handleDraftSaved}
+        />
       </main>
     </div>
   );

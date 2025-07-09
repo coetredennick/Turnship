@@ -99,6 +99,46 @@ export const authAPI = {
   }
 };
 
+// Connections API functions
+export const connectionsAPI = {
+  // Create new connection
+  createConnection: (connectionData) => api.post('/api/connections', connectionData),
+  
+  // Get all user's connections
+  getConnections: () => api.get('/api/connections'),
+  
+  // Get specific connection by ID
+  getConnection: (id) => api.get(`/api/connections/${id}`),
+  
+  // Update connection
+  updateConnection: (id, updates) => api.put(`/api/connections/${id}`, updates),
+  
+  // Delete connection
+  deleteConnection: (id) => api.delete(`/api/connections/${id}`)
+};
+
+// Emails API functions
+export const emailsAPI = {
+  // Generate AI-powered emails for multiple connections
+  generateEmail: (connectionIds, options) => api.post('/api/emails/generate', { 
+    connectionIds, 
+    ...options 
+  }, {
+    timeout: 60000 // 60 seconds for AI generation
+  }),
+  
+  // Save email draft for a specific connection
+  saveDraft: (connectionId, draft) => api.put(`/api/emails/draft/${connectionId}`, { draft }),
+  
+  // Mark email as sent for a specific connection
+  sendEmail: (connectionId, emailType = 'First Impression') => api.post(`/api/emails/send/${connectionId}`, { 
+    emailType 
+  }),
+  
+  // Get saved draft for a specific connection
+  getDraft: (connectionId) => api.get(`/api/emails/draft/${connectionId}`)
+};
+
 // General API functions for future use
 export const generalAPI = {
   // Health check

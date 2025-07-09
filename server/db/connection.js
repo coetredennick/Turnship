@@ -76,9 +76,74 @@ const initDB = () => new Promise((resolve, reject) => {
       if (err) {
         console.error('Error creating oauth_tokens table:', err.message);
         reject(err);
+      }
+    });
+
+    // Create connections table
+    db.run(`CREATE TABLE IF NOT EXISTS connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      full_name TEXT NOT NULL,
+      company TEXT,
+      connection_type TEXT,
+      job_title TEXT,
+      industry TEXT,
+      notes TEXT,
+      status TEXT DEFAULT 'Not Contacted',
+      email_status TEXT DEFAULT 'Not Contacted',
+      last_email_draft TEXT,
+      last_email_sent_date DATETIME,
+      custom_connection_description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating connections table:', err.message);
+        reject(err);
       } else {
-        console.log('Database initialized');
-        resolve();
+        // Add migration logic for existing tables
+        addEmailTrackingColumns()
+          .then(() => {
+            console.log('Database initialized');
+            resolve();
+          })
+          .catch(migrationErr => {
+            console.error('Migration error:', migrationErr.message);
+            reject(migrationErr);
+          });
+      }
+    });
+  });
+});
+
+// Migration function to add email tracking columns to existing tables
+const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
+  const alterQueries = [
+    'ALTER TABLE connections ADD COLUMN email_status TEXT DEFAULT "Not Contacted"',
+    'ALTER TABLE connections ADD COLUMN last_email_draft TEXT',
+    'ALTER TABLE connections ADD COLUMN last_email_sent_date DATETIME',
+    'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT'
+  ];
+
+  let completed = 0;
+  let hasError = false;
+
+  alterQueries.forEach((query, index) => {
+    db.run(query, (err) => {
+      if (err && !err.message.includes('duplicate column name')) {
+        if (!hasError) {
+          hasError = true;
+          console.error(`Migration error on query ${index + 1}:`, err.message);
+          reject(err);
+        }
+      } else {
+        completed++;
+        if (completed === alterQueries.length) {
+          console.log('Email tracking columns migration completed');
+          resolve();
+        }
       }
     });
   });
@@ -206,6 +271,256 @@ const getUserTokens = (userId) => new Promise((resolve, reject) => {
   });
 });
 
+// Connection operations
+const createConnection = (userId, connectionData) => new Promise((resolve, reject) => {
+  const {
+    email,
+    full_name,
+    company,
+    connection_type,
+    job_title,
+    industry,
+    notes,
+    status = 'Not Contacted',
+    email_status = 'Not Contacted',
+    custom_connection_description = ''
+  } = connectionData;
+
+  const timestamp = Date.now();
+
+  db.run(
+    `INSERT INTO connections (
+      user_id, email, full_name, company, connection_type, 
+      job_title, industry, notes, status, email_status, custom_connection_description,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, timestamp, timestamp],
+    function insertCallback(err) {
+      if (err) {
+        console.error('Error creating connection:', err);
+        reject(err);
+      } else {
+        resolve({
+          id: this.lastID,
+          user_id: userId,
+          email,
+          full_name,
+          company,
+          connection_type,
+          job_title,
+          industry,
+          notes,
+          status,
+          email_status,
+          custom_connection_description,
+          created_at: timestamp,
+          updated_at: timestamp,
+        });
+      }
+    }
+  );
+});
+
+const getConnectionsByUserId = (userId) => new Promise((resolve, reject) => {
+  db.all(
+    'SELECT * FROM connections WHERE user_id = ? ORDER BY created_at DESC',
+    [userId],
+    (err, connections) => {
+      if (err) {
+        console.error('Error fetching connections:', err);
+        reject(err);
+      } else {
+        resolve(connections || []);
+      }
+    }
+  );
+});
+
+const getConnectionById = (connectionId) => new Promise((resolve, reject) => {
+  db.get(
+    'SELECT * FROM connections WHERE id = ?',
+    [connectionId],
+    (err, connection) => {
+      if (err) {
+        console.error('Error fetching connection:', err);
+        reject(err);
+      } else {
+        resolve(connection);
+      }
+    }
+  );
+});
+
+const updateConnection = (connectionId, updates) => new Promise((resolve, reject) => {
+  const allowedFields = [
+    'email', 'full_name', 'company', 'connection_type', 
+    'job_title', 'industry', 'notes', 'status', 'email_status',
+    'custom_connection_description'
+  ];
+  
+  const updateFields = [];
+  const values = [];
+  
+  Object.keys(updates).forEach(key => {
+    if (allowedFields.includes(key)) {
+      updateFields.push(`${key} = ?`);
+      values.push(updates[key]);
+    }
+  });
+  
+  if (updateFields.length === 0) {
+    return reject(new Error('No valid fields to update'));
+  }
+  
+  // Add updated_at timestamp
+  updateFields.push('updated_at = ?');
+  values.push(Date.now());
+  values.push(connectionId);
+  
+  const query = `UPDATE connections SET ${updateFields.join(', ')} WHERE id = ?`;
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error updating connection:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Connection not found'));
+    } else {
+      // Return the updated connection
+      getConnectionById(connectionId)
+        .then(resolve)
+        .catch(reject);
+    }
+  });
+});
+
+const deleteConnection = (connectionId) => new Promise((resolve, reject) => {
+  db.run(
+    'DELETE FROM connections WHERE id = ?',
+    [connectionId],
+    function deleteCallback(err) {
+      if (err) {
+        console.error('Error deleting connection:', err);
+        reject(err);
+      } else if (this.changes === 0) {
+        reject(new Error('Connection not found'));
+      } else {
+        resolve({ id: connectionId, deleted: true });
+      }
+    }
+  );
+});
+
+// Email status tracking functions
+const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => new Promise((resolve, reject) => {
+  const validStatuses = [
+    'Not Contacted',
+    'First Impression (draft)',
+    'First Impression (sent)',
+    'First Impression (nr)',
+    'Follow-up (draft)',
+    'Follow-up (sent)',
+    'Responded - Positive',
+    'Responded - Negative',
+    'Meeting Scheduled'
+  ];
+  
+  if (!validStatuses.includes(status)) {
+    return reject(new Error(`Invalid email status: ${status}`));
+  }
+  
+  const updateFields = ['email_status = ?', 'updated_at = ?'];
+  const values = [status, Date.now()];
+  
+  if (sentDate) {
+    updateFields.push('last_email_sent_date = ?');
+    values.push(sentDate);
+  }
+  
+  values.push(connectionId);
+  
+  const query = `UPDATE connections SET ${updateFields.join(', ')} WHERE id = ?`;
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error updating email status:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Connection not found'));
+    } else {
+      getConnectionById(connectionId)
+        .then(resolve)
+        .catch(reject);
+    }
+  });
+});
+
+// Draft storage functions
+const saveEmailDraft = (connectionId, draftContent) => new Promise((resolve, reject) => {
+  if (!draftContent || typeof draftContent !== 'string') {
+    return reject(new Error('Draft content must be a non-empty string'));
+  }
+  
+  const query = 'UPDATE connections SET last_email_draft = ?, updated_at = ? WHERE id = ?';
+  const values = [draftContent, Date.now(), connectionId];
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error saving email draft:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Connection not found'));
+    } else {
+      resolve({
+        connectionId,
+        draftSaved: true,
+        draftLength: draftContent.length
+      });
+    }
+  });
+});
+
+const getConnectionDraft = (connectionId) => new Promise((resolve, reject) => {
+  const query = 'SELECT last_email_draft FROM connections WHERE id = ?';
+  
+  db.get(query, [connectionId], (err, row) => {
+    if (err) {
+      console.error('Error fetching connection draft:', err);
+      reject(err);
+    } else if (!row) {
+      reject(new Error('Connection not found'));
+    } else {
+      resolve({
+        connectionId,
+        draft: row.last_email_draft || null
+      });
+    }
+  });
+});
+
+// Custom connection description function
+const updateCustomConnectionDescription = (connectionId, description) => new Promise((resolve, reject) => {
+  if (typeof description !== 'string') {
+    return reject(new Error('Description must be a string'));
+  }
+  
+  const query = 'UPDATE connections SET custom_connection_description = ?, updated_at = ? WHERE id = ?';
+  const values = [description, Date.now(), connectionId];
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error updating custom connection description:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Connection not found'));
+    } else {
+      getConnectionById(connectionId)
+        .then(resolve)
+        .catch(reject);
+    }
+  });
+});
+
 module.exports = {
   db,
   initDB,
@@ -214,4 +529,13 @@ module.exports = {
   findUserByEmail,
   updateUserTokens,
   getUserTokens,
+  createConnection,
+  getConnectionsByUserId,
+  getConnectionById,
+  updateConnection,
+  deleteConnection,
+  updateConnectionEmailStatus,
+  saveEmailDraft,
+  getConnectionDraft,
+  updateCustomConnectionDescription,
 };

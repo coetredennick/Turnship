@@ -3,6 +3,17 @@ const { getUserTokens, updateUserTokens } = require('../db/connection');
 const { createOAuth2Client } = require('../services/oauth');
 
 const requireAuth = (req, res, next) => {
+  // DEVELOPMENT MODE: Create mock user if none exists
+  if (process.env.NODE_ENV === 'development' && !req.user) {
+    req.user = {
+      id: 1,
+      email: 'coetredfsu@gmail.com',
+      name: 'Dev User'
+    };
+    console.log('Development mode: Mock user created for API request');
+    return next();
+  }
+  
   if (!req.user) {
     return res.status(401).json({
       error: 'Authentication required',
