@@ -5,6 +5,7 @@ process.env.SESSION_SECRET = 'test-session-secret';
 process.env.GOOGLE_CLIENT_ID = 'test-google-client-id';
 process.env.GOOGLE_CLIENT_SECRET = 'test-google-client-secret';
 process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3001/auth/google/callback';
+process.env.OPENAI_API_KEY = 'test-api-key';
 
 // Mock console for cleaner test output
 global.console = {

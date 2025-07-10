@@ -3,18 +3,41 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, '..', 'dev.db');
 
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-    process.exit(1);
+let db;
+
+function ensureDb() {
+  if (!db || !db.open) {
+    db = new sqlite3.Database(DB_PATH, (err) => {
+      if (err) {
+        console.error('Error opening database:', err.message);
+        process.exit(1);
+      }
+      console.log('Connected to SQLite database');
+    });
   }
-  console.log('Connected to SQLite database');
+  return db;
+}
+
+// Initialize database connection immediately
+ensureDb();
+
+// Proxy that always uses an active database connection
+const dbProxy = new Proxy({}, {
+  get(_target, prop) {
+    const activeDb = ensureDb();
+    const value = activeDb[prop];
+    if (typeof value === 'function') {
+      return value.bind(activeDb);
+    }
+    return value;
+  },
 });
 
 const initDB = () => new Promise((resolve, reject) => {
-  db.serialize(() => {
+  const activeDb = ensureDb();
+  activeDb.serialize(() => {
     // Create users table
-    db.run(`CREATE TABLE IF NOT EXISTS users (
+    activeDb.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
@@ -25,7 +48,7 @@ const initDB = () => new Promise((resolve, reject) => {
     });
 
     // Create projects table
-    db.run(`CREATE TABLE IF NOT EXISTS projects (
+    activeDb.run(`CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       description TEXT,
@@ -41,7 +64,7 @@ const initDB = () => new Promise((resolve, reject) => {
     });
 
     // Create tasks table
-    db.run(`CREATE TABLE IF NOT EXISTS tasks (
+    activeDb.run(`CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -61,7 +84,7 @@ const initDB = () => new Promise((resolve, reject) => {
     });
 
     // Create oauth_tokens table
-    db.run(`CREATE TABLE IF NOT EXISTS oauth_tokens (
+    activeDb.run(`CREATE TABLE IF NOT EXISTS oauth_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       access_token TEXT NOT NULL,
@@ -80,7 +103,7 @@ const initDB = () => new Promise((resolve, reject) => {
     });
 
     // Create connections table
-    db.run(`CREATE TABLE IF NOT EXISTS connections (
+    activeDb.run(`CREATE TABLE IF NOT EXISTS connections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       email TEXT NOT NULL,
@@ -603,7 +626,7 @@ const updateCustomConnectionDescription = (connectionId, description) => new Pro
 });
 
 module.exports = {
-  db,
+  db: dbProxy,
   initDB,
   createUser,
   findUserById,
