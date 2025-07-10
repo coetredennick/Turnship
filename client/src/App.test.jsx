@@ -22,7 +22,7 @@ test('renders app with authentication provider', () => {
   const authProvider = screen.getByTestId('auth-provider')
   expect(authProvider).toBeInTheDocument()
   
-  // When loading is true, it should show loading state
-  const loadingText = screen.getByText(/connecting to your networking hub/i)
-  expect(loadingText).toBeInTheDocument()
+  // Router should render the Dashboard directly in development mode
+  const welcomeText = screen.getByText(/welcome back/i)
+  expect(welcomeText).toBeInTheDocument()
 })
