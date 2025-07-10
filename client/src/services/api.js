@@ -114,7 +114,10 @@ export const connectionsAPI = {
   updateConnection: (id, updates) => api.put(`/api/connections/${id}`, updates),
   
   // Delete connection
-  deleteConnection: (id) => api.delete(`/api/connections/${id}`)
+  deleteConnection: (id) => api.delete(`/api/connections/${id}`),
+  
+  // Track when user opens email composer for a connection
+  trackComposerOpened: (id) => api.post(`/api/connections/${id}/composer-opened`)
 };
 
 // Emails API functions

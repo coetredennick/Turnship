@@ -296,8 +296,8 @@ router.put('/draft/:connectionId', requireAuth, async (req, res) => {
       });
     }
     
-    // Save draft
-    const result = await saveEmailDraft(connectionId, draft);
+    // Save draft with current status
+    const result = await saveEmailDraft(connectionId, draft, connection.email_status);
     
     return res.json({
       message: 'Draft saved successfully',
@@ -354,10 +354,15 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
       });
     }
     
-    // Update email status to sent
-    const status = `${emailType} (sent)`;
+    // Update email status - advance to next stage after sending
+    const statusProgressionMap = {
+      'First Impression': 'Follow-up',
+      'Follow-up': 'Response'
+    };
+    
+    const nextStatus = statusProgressionMap[emailType] || emailType;
     const sentDate = Date.now();
-    const updatedConnection = await updateConnectionEmailStatus(connectionId, status, sentDate);
+    const updatedConnection = await updateConnectionEmailStatus(connectionId, nextStatus, sentDate);
     
     return res.json({
       message: 'Email status updated successfully',

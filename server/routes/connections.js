@@ -6,6 +6,7 @@ const {
   getConnectionById,
   updateConnection,
   deleteConnection,
+  trackComposerOpened,
 } = require('../db/connection');
 
 const router = express.Router();
@@ -325,6 +326,51 @@ router.delete('/:id', requireAuth, async (req, res) => {
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to delete connection',
+    });
+  }
+});
+
+// POST /api/connections/:id/composer-opened - Track when user opens email composer
+router.post('/:id/composer-opened', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const connectionId = parseInt(req.params.id, 10);
+    
+    if (isNaN(connectionId)) {
+      return res.status(400).json({
+        error: 'Invalid connection ID',
+        message: 'Connection ID must be a valid number',
+      });
+    }
+    
+    // Check if connection exists and user owns it
+    const existingConnection = await getConnectionById(connectionId);
+    if (!existingConnection) {
+      return res.status(404).json({
+        error: 'Connection not found',
+        message: 'The specified connection does not exist',
+      });
+    }
+    
+    if (existingConnection.user_id !== userId) {
+      return res.status(403).json({
+        error: 'Access forbidden',
+        message: 'You do not have permission to access this connection',
+      });
+    }
+    
+    // Track composer opened
+    await trackComposerOpened(connectionId);
+    
+    return res.json({
+      message: 'Composer opened tracked successfully',
+      tracked: true,
+    });
+  } catch (error) {
+    console.error('Error tracking composer opened:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to track composer opened',
     });
   }
 });

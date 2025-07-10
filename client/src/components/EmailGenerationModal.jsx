@@ -140,6 +140,8 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
     
     try {
       const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
+      // Find the connection to get current status for labeling the draft
+      const connection = connections.find(c => c.id === connectionId);
       await emailsAPI.saveDraft(connectionId, draftContent);
       setDraftSaveResults(prev => ({ 
         ...prev, 

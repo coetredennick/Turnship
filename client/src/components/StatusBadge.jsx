@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import ProgressDonut from './ProgressDonut';
 
-const StatusBadge = ({ status, editable = false, onStatusChange, connectionId }) => {
+const StatusBadge = ({ status, editable = false, onStatusChange, connectionId, connection }) => {
   const [isEditing, setIsEditing] = useState(false);
 
   // Simplified 5-status system with intelligent backend detection
@@ -40,39 +41,51 @@ const StatusBadge = ({ status, editable = false, onStatusChange, connectionId })
   if (!status) return null;
 
   return (
-    <div className="relative">
-      {editable && isEditing ? (
-        // Dropdown for editing
-        <div className="relative">
-          <select
-            value={status}
-            onChange={(e) => handleStatusSelect(e.target.value)}
-            onBlur={() => setIsEditing(false)}
-            autoFocus
-            className={`text-xs font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBadgeColor(status)}`}
-          >
-            {statusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : (
-        // Badge display (clickable if editable)
-        <span
-          className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border cursor-${editable ? 'pointer hover:shadow-sm' : 'default'} ${getBadgeColor(status)}`}
-          onClick={editable ? () => setIsEditing(true) : undefined}
-          title={editable ? 'Click to change status' : status}
-        >
-          {status}
-          {editable && (
-            <svg className="ml-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          )}
-        </span>
+    <div className="flex items-center space-x-2">
+      {/* Progress Donut */}
+      {connection && (
+        <ProgressDonut 
+          connection={connection} 
+          size={20} 
+          strokeWidth={2}
+        />
       )}
+      
+      {/* Status Badge */}
+      <div className="relative">
+        {editable && isEditing ? (
+          // Dropdown for editing
+          <div className="relative">
+            <select
+              value={status}
+              onChange={(e) => handleStatusSelect(e.target.value)}
+              onBlur={() => setIsEditing(false)}
+              autoFocus
+              className={`text-xs font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBadgeColor(status)}`}
+            >
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          // Badge display (clickable if editable)
+          <span
+            className={`inline-flex px-2 py-1 rounded-full text-xs font-medium border cursor-${editable ? 'pointer hover:shadow-sm' : 'default'} ${getBadgeColor(status)}`}
+            onClick={editable ? () => setIsEditing(true) : undefined}
+            title={editable ? 'Click to change status' : status}
+          >
+            {status}
+            {editable && (
+              <svg className="ml-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </span>
+        )}
+      </div>
     </div>
   );
 };

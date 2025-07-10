@@ -1,12 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { InlineLoading } from './Loading';
-import { emailsAPI, handleAPIError } from '../services/api';
+import { emailsAPI, connectionsAPI, handleAPIError } from '../services/api';
 
 // Draft Bank Modal - Shows all saved drafts
 const DraftBankModal = ({ isOpen, onClose, connections, targetConnection, onDraftSelected, onDraftDeleted }) => {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Get draft status badge color (matching StatusBadge color system)
+  const getDraftStatusBadgeColor = (status) => {
+    switch (status) {
+      case 'Not Contacted':
+        return 'bg-gray-100 text-gray-700';
+      case 'First Impression':
+        return 'bg-blue-100 text-blue-700'; // Professional/active
+      case 'Follow-up':
+        return 'bg-orange-100 text-orange-700'; // Ongoing relationship
+      case 'Response':
+        return 'bg-purple-100 text-purple-700'; // Interaction received
+      case 'Meeting Scheduled':
+        return 'bg-green-100 text-green-700'; // Success/progress
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
 
   // Load drafts when modal opens or target connection changes
   useEffect(() => {
@@ -143,6 +161,11 @@ const DraftBankModal = ({ isOpen, onClose, connections, targetConnection, onDraf
                         </div>
                       </div>
                       <div className="ml-11">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className={`text-xs font-medium px-2 py-1 rounded-full ${getDraftStatusBadgeColor(connection.draft_status || connection.email_status || 'Not Contacted')}`}>
+                            {connection.draft_status || connection.email_status || 'Unknown'} Draft
+                          </span>
+                        </div>
                         <p className="text-sm text-gray-600 bg-gray-50 rounded p-2">
                           {getDraftPreview(connection.last_email_draft)}
                         </p>
@@ -290,6 +313,9 @@ const EmailComposer = ({
   // Initialize email content when modal opens
   useEffect(() => {
     if (isOpen && connection) {
+      // Track that user opened composer for this connection (for progress tracking)
+      trackComposerOpened();
+      
       if (initialEmail) {
         // Use provided initial email (from generation)
         setEmail({
@@ -311,6 +337,16 @@ const EmailComposer = ({
       setHasUnsavedChanges(false);
     }
   }, [isOpen, connection, initialEmail, loadExistingDraft]);
+  
+  // Track composer opened for progress indicator
+  const trackComposerOpened = async () => {
+    try {
+      await connectionsAPI.trackComposerOpened(connection.id);
+    } catch (error) {
+      // Silent fail - this is just for progress tracking
+      console.log('Could not track composer opened:', error);
+    }
+  };
 
   // Auto-save functionality
   useEffect(() => {
@@ -362,6 +398,7 @@ const EmailComposer = ({
     
     try {
       const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
+      // Save draft with current status label
       const response = await emailsAPI.saveDraft(connection.id, draftContent);
       
       setLastSaved(new Date());
@@ -394,7 +431,7 @@ const EmailComposer = ({
     setError(null);
     
     try {
-      // First save as draft
+      // First save as draft with current status label
       const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
       await emailsAPI.saveDraft(connection.id, draftContent);
       

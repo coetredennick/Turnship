@@ -612,6 +612,7 @@ const Dashboard = () => {
                               editable={true}
                               onStatusChange={handleStatusChange}
                               connectionId={connection.id}
+                              connection={connection}
                             />
                           </div>
                           <span>Added: {new Date(connection.created_at).toLocaleDateString()}</span>

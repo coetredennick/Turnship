@@ -164,7 +164,9 @@ const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
     'ALTER TABLE connections ADD COLUMN last_email_draft TEXT',
     'ALTER TABLE connections ADD COLUMN last_email_sent_date DATETIME',
     'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
-    'ALTER TABLE connections ADD COLUMN initial_purpose TEXT'
+    'ALTER TABLE connections ADD COLUMN initial_purpose TEXT',
+    'ALTER TABLE connections ADD COLUMN status_started_date DATETIME',
+    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME'
   ];
 
   let completed = 0;
@@ -397,7 +399,8 @@ const updateConnection = (connectionId, updates) => new Promise((resolve, reject
   const allowedFields = [
     'email', 'full_name', 'company', 'connection_type', 
     'job_title', 'industry', 'notes', 'status', 'email_status',
-    'custom_connection_description', 'last_email_sent_date', 'initial_purpose'
+    'custom_connection_description', 'last_email_sent_date', 'initial_purpose',
+    'status_started_date', 'composer_opened_date', 'draft_status'
   ];
   
   const updateFields = [];
@@ -467,8 +470,9 @@ const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => n
     return reject(new Error(`Invalid email status: ${status}`));
   }
   
-  const updateFields = ['email_status = ?', 'updated_at = ?'];
-  const values = [status, Date.now()];
+  const now = Date.now();
+  const updateFields = ['email_status = ?', 'updated_at = ?', 'status_started_date = ?', 'composer_opened_date = ?'];
+  const values = [status, now, now, null]; // Reset progress when status changes
   
   if (sentDate) {
     updateFields.push('last_email_sent_date = ?');
@@ -493,14 +497,53 @@ const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => n
   });
 });
 
-// Draft storage functions
-const saveEmailDraft = (connectionId, draftContent) => new Promise((resolve, reject) => {
+// Track when user opens email composer for current status
+const trackComposerOpened = (connectionId) => new Promise((resolve, reject) => {
+  const query = 'UPDATE connections SET composer_opened_date = ? WHERE id = ?';
+  const values = [Date.now(), connectionId];
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error tracking composer opened:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Connection not found'));
+    } else {
+      resolve({ success: true });
+    }
+  });
+});
+
+// Draft storage functions  
+const saveEmailDraft = (connectionId, draftContent, draftStatus = null) => new Promise((resolve, reject) => {
   if (typeof draftContent !== 'string') {
     return reject(new Error('Draft content must be a string'));
   }
   
-  const query = 'UPDATE connections SET last_email_draft = ?, updated_at = ? WHERE id = ?';
-  const values = [draftContent, Date.now(), connectionId];
+  // Get current connection to determine status if not provided
+  if (!draftStatus) {
+    getConnectionById(connectionId)
+      .then(connection => {
+        if (connection) {
+          saveEmailDraft(connectionId, draftContent, connection.email_status)
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(new Error('Connection not found'));
+        }
+      })
+      .catch(reject);
+    return;
+  }
+  
+  // If draft is empty, clear both draft and draft_status
+  const isDraftEmpty = !draftContent || draftContent.trim() === '';
+  const query = isDraftEmpty 
+    ? 'UPDATE connections SET last_email_draft = ?, draft_status = NULL, updated_at = ? WHERE id = ?'
+    : 'UPDATE connections SET last_email_draft = ?, draft_status = ?, updated_at = ? WHERE id = ?';
+  const values = isDraftEmpty 
+    ? [draftContent, Date.now(), connectionId]
+    : [draftContent, draftStatus, Date.now(), connectionId];
   
   db.run(query, values, function updateCallback(err) {
     if (err) {
@@ -573,6 +616,7 @@ module.exports = {
   updateConnection,
   deleteConnection,
   updateConnectionEmailStatus,
+  trackComposerOpened,
   saveEmailDraft,
   getConnectionDraft,
   updateCustomConnectionDescription,
