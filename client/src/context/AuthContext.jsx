@@ -40,7 +40,7 @@ const authReducer = (state, action) => {
         ...state,
         loading: action.payload
       };
-    
+
     case AUTH_ACTIONS.SET_USER:
       return {
         ...state,
@@ -49,26 +49,26 @@ const authReducer = (state, action) => {
         loading: false,
         error: null
       };
-    
+
     case AUTH_ACTIONS.SET_ERROR:
       return {
         ...state,
         error: action.payload,
         loading: false
       };
-    
+
     case AUTH_ACTIONS.CLEAR_ERROR:
       return {
         ...state,
         error: null
       };
-    
+
     case AUTH_ACTIONS.LOGOUT:
       return {
         ...initialState,
         loading: false
       };
-    
+
     default:
       return state;
   }
@@ -123,7 +123,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
-      
+
       await authAPI.logout();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     } catch (error) {
@@ -145,7 +145,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // Don't set global loading state for Gmail test to avoid Router redirects
       const response = await authAPI.testGmail();
-      
+
       return {
         success: true,
         data: response.data
@@ -156,7 +156,7 @@ export const AuthProvider = ({ children }) => {
       }
       const errorMessage = handleAPIError(error, 'Failed to test Gmail connection');
       // Don't set global error state for Gmail test - let Dashboard handle it
-      
+
       return {
         success: false,
         error: errorMessage
@@ -186,7 +186,7 @@ export const AuthProvider = ({ children }) => {
     handleOAuthSuccess();
 
     window.addEventListener('focus', handleFocus);
-    
+
     return () => {
       window.removeEventListener('focus', handleFocus);
     };
@@ -196,10 +196,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
-    
+
     if (error) {
       let errorMessage = 'Authentication failed';
-      
+
       switch (error) {
         case 'oauth_denied':
           errorMessage = 'Login was cancelled. Please try again to access your networking dashboard.';
@@ -219,9 +219,9 @@ export const AuthProvider = ({ children }) => {
         default:
           errorMessage = 'An unexpected error occurred during login.';
       }
-      
+
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
-      
+
       // Clear error from URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -233,7 +233,7 @@ export const AuthProvider = ({ children }) => {
     authenticated: state.authenticated,
     loading: state.loading,
     error: state.error,
-    
+
     // Functions
     login,
     logout,
@@ -252,11 +252,11 @@ export const AuthProvider = ({ children }) => {
 // Custom hook to use auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
+
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
+
   return context;
 };
 
