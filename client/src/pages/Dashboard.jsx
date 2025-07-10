@@ -552,6 +552,16 @@ const Dashboard = () => {
                               <span className="ml-1 text-gray-900">{connection.connection_type}</span>
                             </div>
                           )}
+                          {connection.initial_purpose && (
+                            <div>
+                              <span className="font-medium text-gray-500">Purpose:</span>
+                              <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                {connection.initial_purpose === 'summer-internship' ? 'Summer Internship' : 
+                                 connection.initial_purpose === 'just-reaching-out' ? 'Just Reaching Out' : 
+                                 'Advice'}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {connection.notes && (
                           <div className="mt-2">

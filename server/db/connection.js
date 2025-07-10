@@ -163,7 +163,8 @@ const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
     'ALTER TABLE connections ADD COLUMN email_status TEXT DEFAULT "Not Contacted"',
     'ALTER TABLE connections ADD COLUMN last_email_draft TEXT',
     'ALTER TABLE connections ADD COLUMN last_email_sent_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT'
+    'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
+    'ALTER TABLE connections ADD COLUMN initial_purpose TEXT'
   ];
 
   let completed = 0;
@@ -322,7 +323,8 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     notes,
     status = 'Not Contacted',
     email_status = 'Not Contacted',
-    custom_connection_description = ''
+    custom_connection_description = '',
+    initial_purpose = null
   } = connectionData;
 
   const timestamp = Date.now();
@@ -331,9 +333,9 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     `INSERT INTO connections (
       user_id, email, full_name, company, connection_type, 
       job_title, industry, notes, status, email_status, custom_connection_description,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, timestamp, timestamp],
+      initial_purpose, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, initial_purpose, timestamp, timestamp],
     function insertCallback(err) {
       if (err) {
         console.error('Error creating connection:', err);
@@ -352,6 +354,7 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
           status,
           email_status,
           custom_connection_description,
+          initial_purpose,
           created_at: timestamp,
           updated_at: timestamp,
         });
@@ -394,7 +397,7 @@ const updateConnection = (connectionId, updates) => new Promise((resolve, reject
   const allowedFields = [
     'email', 'full_name', 'company', 'connection_type', 
     'job_title', 'industry', 'notes', 'status', 'email_status',
-    'custom_connection_description', 'last_email_sent_date'
+    'custom_connection_description', 'last_email_sent_date', 'initial_purpose'
   ];
   
   const updateFields = [];
@@ -454,13 +457,9 @@ const deleteConnection = (connectionId) => new Promise((resolve, reject) => {
 const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => new Promise((resolve, reject) => {
   const validStatuses = [
     'Not Contacted',
-    'First Impression (draft)',
-    'First Impression (sent)',
-    'First Impression (nr)',
-    'Follow-up (draft)',
-    'Follow-up (sent)',
-    'Responded - Positive',
-    'Responded - Negative',
+    'First Impression',
+    'Follow-up',
+    'Response',
     'Meeting Scheduled'
   ];
   
