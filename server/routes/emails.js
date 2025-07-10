@@ -13,30 +13,30 @@ const router = express.Router();
 // Validation helpers
 const validateEmailGenerationRequest = (data) => {
   const errors = [];
-  
+
   if (!data.connectionIds || !Array.isArray(data.connectionIds) || data.connectionIds.length === 0) {
     errors.push('Connection IDs are required and must be a non-empty array');
   }
-  
-  if (data.connectionIds && data.connectionIds.some(id => !Number.isInteger(id) || id <= 0)) {
+
+  if (data.connectionIds && data.connectionIds.some((id) => !Number.isInteger(id) || id <= 0)) {
     errors.push('All connection IDs must be positive integers');
   }
-  
+
   const validPurposes = ['summer-internship', 'just-reaching-out', 'advice', 'informational-interview', 'job-inquiry', 'industry-insights', 'follow-up', 'introduction'];
   if (!data.purpose || !validPurposes.includes(data.purpose)) {
     errors.push(`Purpose is required and must be one of: ${validPurposes.join(', ')}`);
   }
-  
+
   const validTones = ['enthusiastic', 'respectful', 'confident', 'casual', 'professional', 'formal'];
   if (!data.tone || !validTones.includes(data.tone)) {
     errors.push(`Tone is required and must be one of: ${validTones.join(', ')}`);
   }
-  
+
   const validLengths = ['short', 'medium', 'long'];
   if (!data.length || !validLengths.includes(data.length)) {
     errors.push(`Length is required and must be one of: ${validLengths.join(', ')}`);
   }
-  
+
   return errors;
 };
 
@@ -50,9 +50,9 @@ const verifyConnectionOwnership = async (connectionIds, userId) => {
       } catch (error) {
         return false;
       }
-    })
+    }),
   );
-  
+
   return connectionChecks.every(Boolean);
 };
 
@@ -62,25 +62,24 @@ const generateEmailContent = async (connections, purpose, tone, length) => {
     // Use AI service to generate batch emails
     const options = { purpose, tone, length };
     const result = await generateBatchEmails(connections, DEFAULT_USER_PROFILE, options);
-    
+
     // Handle any failed generations
     if (result.failed.length > 0) {
       console.warn('Some email generations failed:', result.failed);
     }
-    
+
     // Return successful generations in expected format
-    return result.successful.map(email => ({
+    return result.successful.map((email) => ({
       subject: email.subject,
       body: email.body,
       connectionId: email.connectionId,
       recipient: email.recipient,
       generated_at: email.generated_at,
-      parameters: email.parameters
+      parameters: email.parameters,
     }));
-    
   } catch (error) {
     console.error('AI email generation failed:', error);
-    
+
     // Fallback to basic template if AI fails
     console.log('Falling back to basic email templates...');
     return generateFallbackEmails(connections, purpose, tone, length);
@@ -93,10 +92,10 @@ const generateFallbackEmails = (connections, purpose, tone, length) => {
   const purposeMapping = {
     'summer-internship': 'job-inquiry',
     'just-reaching-out': 'introduction',
-    'advice': 'industry-insights'
+    advice: 'industry-insights',
   };
   const templatePurpose = purposeMapping[purpose] || purpose;
-  
+
   const emailTemplates = {
     'informational-interview': {
       subject: 'Informational Interview Request',
@@ -111,7 +110,7 @@ I'm happy to work around your schedule and can meet virtually at your convenienc
 Thank you for considering my request.
 
 Best regards,
-Amy Chen`
+Amy Chen`,
     },
     'job-inquiry': {
       subject: 'Inquiry About Opportunities at {company}',
@@ -126,7 +125,7 @@ Would you be open to a brief conversation about opportunities at {company}?
 I look forward to hearing from you.
 
 Best regards,
-Amy Chen`
+Amy Chen`,
     },
     'industry-insights': {
       subject: 'Seeking Industry Insights from {company}',
@@ -141,7 +140,7 @@ Would you be available for a brief conversation to share your thoughts on the cu
 Thank you for your time and consideration.
 
 Best regards,
-Amy Chen`
+Amy Chen`,
     },
     'follow-up': {
       subject: 'Following Up on Our Conversation',
@@ -154,9 +153,9 @@ Our discussion was particularly enlightening and has given me a lot to think abo
 I'd love to stay connected and keep you updated on my progress. Please let me know if there's anything I can help you with in return.
 
 Best regards and thank you again,
-Amy Chen`
+Amy Chen`,
     },
-    'introduction': {
+    introduction: {
       subject: 'Introduction and Connection Request',
       body: `Hello {full_name},
 
@@ -167,19 +166,19 @@ I noticed your impressive background at {company} and your role as {job_title}. 
 I'd love to connect and potentially learn from your expertise. Would you be open to a brief conversation?
 
 Looking forward to connecting,
-Amy Chen`
-    }
+Amy Chen`,
+    },
   };
-  
+
   const template = emailTemplates[templatePurpose];
   if (!template) {
     throw new Error(`No template found for purpose: ${purpose} (mapped to ${templatePurpose})`);
   }
-  
+
   // Generate personalized emails for each connection
-  return connections.map(connection => {
+  return connections.map((connection) => {
     let personalizedBody = template.body.replace(/{(\w+)}/g, (match, key) => connection[key] || match);
-    
+
     // Adjust length based on preference
     if (length === 'short') {
       const paragraphs = personalizedBody.split('\n\n');
@@ -187,17 +186,17 @@ Amy Chen`
     } else if (length === 'long') {
       personalizedBody += '\n\nI\'m happy to provide more details about my background and interests if that would be helpful.';
     }
-    
+
     return {
       subject: template.subject.replace(/{(\w+)}/g, (match, key) => connection[key] || match),
       body: personalizedBody,
       connectionId: connection.id,
       recipient: {
         email: connection.email,
-        name: connection.full_name
+        name: connection.full_name,
       },
       generated_at: new Date().toISOString(),
-      fallback: true
+      fallback: true,
     };
   });
 };
@@ -206,8 +205,10 @@ Amy Chen`
 router.post('/generate', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { connectionIds, purpose, tone, length } = req.body;
-    
+    const {
+      connectionIds, purpose, tone, length,
+    } = req.body;
+
     // Validate request
     const validationErrors = validateEmailGenerationRequest(req.body);
     if (validationErrors.length > 0) {
@@ -217,7 +218,7 @@ router.post('/generate', requireAuth, async (req, res) => {
         details: validationErrors,
       });
     }
-    
+
     // Verify user owns all connections
     const ownsAllConnections = await verifyConnectionOwnership(connectionIds, userId);
     if (!ownsAllConnections) {
@@ -226,20 +227,20 @@ router.post('/generate', requireAuth, async (req, res) => {
         message: 'You do not have permission to generate emails for one or more of these connections',
       });
     }
-    
+
     // Fetch connection details
     const connections = await Promise.all(
-      connectionIds.map(id => getConnectionById(id))
+      connectionIds.map((id) => getConnectionById(id)),
     );
-    
+
     // Generate emails
     const generatedEmails = await generateEmailContent(connections, purpose, tone, length);
-    
+
     // Update email status to First Impression for all connections
     await Promise.all(
-      connectionIds.map(id => updateConnectionEmailStatus(id, 'First Impression'))
+      connectionIds.map((id) => updateConnectionEmailStatus(id, 'First Impression')),
     );
-    
+
     return res.json({
       message: 'Emails generated successfully',
       emails: generatedEmails,
@@ -247,8 +248,8 @@ router.post('/generate', requireAuth, async (req, res) => {
       parameters: {
         purpose,
         tone,
-        length
-      }
+        length,
+      },
     });
   } catch (error) {
     console.error('Error generating emails:', error);
@@ -265,21 +266,21 @@ router.put('/draft/:connectionId', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.connectionId, 10);
     const { draft } = req.body;
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     if (typeof draft !== 'string') {
       return res.status(400).json({
         error: 'Invalid draft content',
         message: 'Draft content must be a string',
       });
     }
-    
+
     // Verify user owns this connection
     const connection = await getConnectionById(connectionId);
     if (!connection) {
@@ -288,24 +289,24 @@ router.put('/draft/:connectionId', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (connection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to save drafts for this connection',
       });
     }
-    
+
     // Save draft with current status
     const result = await saveEmailDraft(connectionId, draft, connection.email_status);
-    
+
     return res.json({
       message: 'Draft saved successfully',
       draft: {
         connectionId: result.connectionId,
         saved: result.draftSaved,
-        length: result.draftLength
-      }
+        length: result.draftLength,
+      },
     });
   } catch (error) {
     console.error('Error saving draft:', error);
@@ -322,14 +323,14 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.connectionId, 10);
     const { emailType = 'First Impression' } = req.body;
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     const validEmailTypes = ['First Impression', 'Follow-up'];
     if (!validEmailTypes.includes(emailType)) {
       return res.status(400).json({
@@ -337,7 +338,7 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
         message: `Email type must be one of: ${validEmailTypes.join(', ')}`,
       });
     }
-    
+
     // Verify user owns this connection
     const connection = await getConnectionById(connectionId);
     if (!connection) {
@@ -346,31 +347,31 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (connection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to update this connection',
       });
     }
-    
+
     // Update email status - advance to next stage after sending
     const statusProgressionMap = {
       'First Impression': 'Follow-up',
-      'Follow-up': 'Response'
+      'Follow-up': 'Response',
     };
-    
+
     const nextStatus = statusProgressionMap[emailType] || emailType;
     const sentDate = Date.now();
     const updatedConnection = await updateConnectionEmailStatus(connectionId, nextStatus, sentDate);
-    
+
     return res.json({
       message: 'Email status updated successfully',
       connection: {
         id: updatedConnection.id,
         email_status: updatedConnection.email_status,
-        last_email_sent_date: updatedConnection.last_email_sent_date
-      }
+        last_email_sent_date: updatedConnection.last_email_sent_date,
+      },
     });
   } catch (error) {
     console.error('Error updating email status:', error);
@@ -386,14 +387,14 @@ router.get('/draft/:connectionId', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.connectionId, 10);
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     // Verify user owns this connection
     const connection = await getConnectionById(connectionId);
     if (!connection) {
@@ -402,24 +403,24 @@ router.get('/draft/:connectionId', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (connection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to access drafts for this connection',
       });
     }
-    
+
     // Get draft
     const draftResult = await getConnectionDraft(connectionId);
-    
+
     return res.json({
       message: 'Draft retrieved successfully',
       draft: {
         connectionId: draftResult.connectionId,
         content: draftResult.draft,
-        hasContent: !!draftResult.draft
-      }
+        hasContent: !!draftResult.draft,
+      },
     });
   } catch (error) {
     console.error('Error retrieving draft:', error);
@@ -446,7 +447,7 @@ router.use((err, req, res, next) => {
     error: 'Email service error',
     message: 'An error occurred in the email service',
   });
-  
+
   return next(err);
 });
 

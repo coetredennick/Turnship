@@ -112,12 +112,12 @@ const initDB = () => new Promise((resolve, reject) => {
                 console.log('Database initialized');
                 resolve();
               })
-              .catch(migrationErr => {
+              .catch((migrationErr) => {
                 console.error('Migration error:', migrationErr.message);
                 reject(migrationErr);
               });
           })
-          .catch(indexErr => {
+          .catch((indexErr) => {
             console.error('Index creation error:', indexErr.message);
             reject(indexErr);
           });
@@ -132,7 +132,7 @@ const addConnectionIndexes = () => new Promise((resolve, reject) => {
     'CREATE INDEX IF NOT EXISTS idx_connections_user_id ON connections(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_connections_email_status ON connections(email_status)',
     'CREATE INDEX IF NOT EXISTS idx_connections_created_at ON connections(created_at)',
-    'CREATE INDEX IF NOT EXISTS idx_connections_email ON connections(email)'
+    'CREATE INDEX IF NOT EXISTS idx_connections_email ON connections(email)',
   ];
 
   let completed = 0;
@@ -166,7 +166,7 @@ const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
     'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
     'ALTER TABLE connections ADD COLUMN initial_purpose TEXT',
     'ALTER TABLE connections ADD COLUMN status_started_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME'
+    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME',
   ];
 
   let completed = 0;
@@ -326,7 +326,7 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     status = 'Not Contacted',
     email_status = 'Not Contacted',
     custom_connection_description = '',
-    initial_purpose = null
+    initial_purpose = null,
   } = connectionData;
 
   const timestamp = Date.now();
@@ -361,7 +361,7 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
           updated_at: timestamp,
         });
       }
-    }
+    },
   );
 });
 
@@ -376,7 +376,7 @@ const getConnectionsByUserId = (userId) => new Promise((resolve, reject) => {
       } else {
         resolve(connections || []);
       }
-    }
+    },
   );
 });
 
@@ -391,39 +391,39 @@ const getConnectionById = (connectionId) => new Promise((resolve, reject) => {
       } else {
         resolve(connection);
       }
-    }
+    },
   );
 });
 
 const updateConnection = (connectionId, updates) => new Promise((resolve, reject) => {
   const allowedFields = [
-    'email', 'full_name', 'company', 'connection_type', 
+    'email', 'full_name', 'company', 'connection_type',
     'job_title', 'industry', 'notes', 'status', 'email_status',
     'custom_connection_description', 'last_email_sent_date', 'initial_purpose',
-    'status_started_date', 'composer_opened_date', 'draft_status'
+    'status_started_date', 'composer_opened_date', 'draft_status',
   ];
-  
+
   const updateFields = [];
   const values = [];
-  
-  Object.keys(updates).forEach(key => {
+
+  Object.keys(updates).forEach((key) => {
     if (allowedFields.includes(key)) {
       updateFields.push(`${key} = ?`);
       values.push(updates[key]);
     }
   });
-  
+
   if (updateFields.length === 0) {
     return reject(new Error('No valid fields to update'));
   }
-  
+
   // Add updated_at timestamp
   updateFields.push('updated_at = ?');
   values.push(Date.now());
   values.push(connectionId);
-  
+
   const query = `UPDATE connections SET ${updateFields.join(', ')} WHERE id = ?`;
-  
+
   db.run(query, values, function updateCallback(err) {
     if (err) {
       console.error('Error updating connection:', err);
@@ -452,7 +452,7 @@ const deleteConnection = (connectionId) => new Promise((resolve, reject) => {
       } else {
         resolve({ id: connectionId, deleted: true });
       }
-    }
+    },
   );
 });
 
@@ -463,26 +463,26 @@ const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => n
     'First Impression',
     'Follow-up',
     'Response',
-    'Meeting Scheduled'
+    'Meeting Scheduled',
   ];
-  
+
   if (!validStatuses.includes(status)) {
     return reject(new Error(`Invalid email status: ${status}`));
   }
-  
+
   const now = Date.now();
   const updateFields = ['email_status = ?', 'updated_at = ?', 'status_started_date = ?', 'composer_opened_date = ?'];
   const values = [status, now, now, null]; // Reset progress when status changes
-  
+
   if (sentDate) {
     updateFields.push('last_email_sent_date = ?');
     values.push(sentDate);
   }
-  
+
   values.push(connectionId);
-  
+
   const query = `UPDATE connections SET ${updateFields.join(', ')} WHERE id = ?`;
-  
+
   db.run(query, values, function updateCallback(err) {
     if (err) {
       console.error('Error updating email status:', err);
@@ -501,7 +501,7 @@ const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => n
 const trackComposerOpened = (connectionId) => new Promise((resolve, reject) => {
   const query = 'UPDATE connections SET composer_opened_date = ? WHERE id = ?';
   const values = [Date.now(), connectionId];
-  
+
   db.run(query, values, function updateCallback(err) {
     if (err) {
       console.error('Error tracking composer opened:', err);
@@ -514,16 +514,16 @@ const trackComposerOpened = (connectionId) => new Promise((resolve, reject) => {
   });
 });
 
-// Draft storage functions  
+// Draft storage functions
 const saveEmailDraft = (connectionId, draftContent, draftStatus = null) => new Promise((resolve, reject) => {
   if (typeof draftContent !== 'string') {
     return reject(new Error('Draft content must be a string'));
   }
-  
+
   // Get current connection to determine status if not provided
   if (!draftStatus) {
     getConnectionById(connectionId)
-      .then(connection => {
+      .then((connection) => {
         if (connection) {
           saveEmailDraft(connectionId, draftContent, connection.email_status)
             .then(resolve)
@@ -535,16 +535,16 @@ const saveEmailDraft = (connectionId, draftContent, draftStatus = null) => new P
       .catch(reject);
     return;
   }
-  
+
   // If draft is empty, clear both draft and draft_status
   const isDraftEmpty = !draftContent || draftContent.trim() === '';
-  const query = isDraftEmpty 
+  const query = isDraftEmpty
     ? 'UPDATE connections SET last_email_draft = ?, draft_status = NULL, updated_at = ? WHERE id = ?'
     : 'UPDATE connections SET last_email_draft = ?, draft_status = ?, updated_at = ? WHERE id = ?';
-  const values = isDraftEmpty 
+  const values = isDraftEmpty
     ? [draftContent, Date.now(), connectionId]
     : [draftContent, draftStatus, Date.now(), connectionId];
-  
+
   db.run(query, values, function updateCallback(err) {
     if (err) {
       console.error('Error saving email draft:', err);
@@ -555,7 +555,7 @@ const saveEmailDraft = (connectionId, draftContent, draftStatus = null) => new P
       resolve({
         connectionId,
         draftSaved: true,
-        draftLength: draftContent.length
+        draftLength: draftContent.length,
       });
     }
   });
@@ -563,7 +563,7 @@ const saveEmailDraft = (connectionId, draftContent, draftStatus = null) => new P
 
 const getConnectionDraft = (connectionId) => new Promise((resolve, reject) => {
   const query = 'SELECT last_email_draft FROM connections WHERE id = ?';
-  
+
   db.get(query, [connectionId], (err, row) => {
     if (err) {
       console.error('Error fetching connection draft:', err);
@@ -573,7 +573,7 @@ const getConnectionDraft = (connectionId) => new Promise((resolve, reject) => {
     } else {
       resolve({
         connectionId,
-        draft: row.last_email_draft || null
+        draft: row.last_email_draft || null,
       });
     }
   });
@@ -584,10 +584,10 @@ const updateCustomConnectionDescription = (connectionId, description) => new Pro
   if (typeof description !== 'string') {
     return reject(new Error('Description must be a string'));
   }
-  
+
   const query = 'UPDATE connections SET custom_connection_description = ?, updated_at = ? WHERE id = ?';
   const values = [description, Date.now(), connectionId];
-  
+
   db.run(query, values, function updateCallback(err) {
     if (err) {
       console.error('Error updating custom connection description:', err);

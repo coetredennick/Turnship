@@ -25,7 +25,7 @@ router.get('/google/callback', (req, res, next) => passport.authenticate('google
   console.log('OAuth callback - Error:', authErr);
   console.log('OAuth callback - User:', user);
   console.log('OAuth callback - Session before login:', req.session);
-  
+
   if (authErr) {
     console.error('OAuth authentication error:', authErr);
     return res.redirect(`${CLIENT_URL}/?error=oauth_error`);
@@ -51,7 +51,7 @@ router.get('/google/callback', (req, res, next) => passport.authenticate('google
 // DEVELOPMENT MODE: Mock authenticated user
 router.get('/me', (req, res) => {
   console.log('Development mode: Returning mock user');
-  
+
   return res.json({
     user: {
       id: 1,
@@ -83,7 +83,7 @@ router.get('/gmail/test', async (req, res) => {
   try {
     const gmailService = new GmailDevService();
     const profile = await gmailService.getProfile();
-    
+
     return res.json({
       message: 'Gmail API connection successful',
       profile: {
@@ -106,7 +106,7 @@ router.get('/gmail/messages', async (req, res) => {
   try {
     const gmailService = new GmailDevService();
     const messages = await gmailService.listMessages('', 10);
-    
+
     return res.json({
       messages: messages.messages || [],
       resultSizeEstimate: messages.resultSizeEstimate || 0,
@@ -125,7 +125,7 @@ router.get('/gmail/networking', async (req, res) => {
   try {
     const gmailService = new GmailDevService();
     const results = await gmailService.searchNetworkingEmails();
-    
+
     return res.json({
       message: 'Networking emails retrieved',
       results: results.messages || [],

@@ -278,7 +278,7 @@ const ConnectionSelectorModal = ({ isOpen, onClose, connections, onConnectionSel
           
           {filteredConnections.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              <p>No connections found matching "{searchTerm}"</p>
+              <p>No connections found matching &quot;{searchTerm}&quot;</p>
             </div>
           )}
         </div>

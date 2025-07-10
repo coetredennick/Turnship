@@ -8,12 +8,12 @@ const requireAuth = (req, res, next) => {
     req.user = {
       id: 1,
       email: 'coetredfsu@gmail.com',
-      name: 'Dev User'
+      name: 'Dev User',
     };
     console.log('Development mode: Mock user created for API request');
     return next();
   }
-  
+
   if (!req.user) {
     return res.status(401).json({
       error: 'Authentication required',

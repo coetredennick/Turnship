@@ -50,7 +50,7 @@ describe('OAuth Tokens DB integration', () => {
     const user = await createUser({ displayName: 'Amy', emails: [{ value: 'amy@example.com' }] });
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)`,
+        'INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)',
         [user.id, 'acc', 'ref', new Date().toISOString(), 'profile'],
         (err) => {
           if (err) return reject(err);
@@ -74,7 +74,7 @@ describe('OAuth Tokens DB integration', () => {
     const user = await createUser({ displayName: 'Bob', emails: [{ value: 'bob@example.com' }] });
     await new Promise((resolve, reject) => {
       db.run(
-        `INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)`,
+        'INSERT INTO oauth_tokens (user_id, access_token, refresh_token, token_expiry, scope) VALUES (?, ?, ?, ?, ?)',
         [user.id, 'old', 'oldRef', new Date('2000-01-01').toISOString(), 'profile'],
         (err) => {
           if (err) return reject(err);

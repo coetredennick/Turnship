@@ -25,7 +25,7 @@ app.use(cors({
     'http://localhost:5175', // Another alternative Vite port
     'http://localhost:5176', // Another alternative Vite port
     'http://localhost:5177', // Another alternative Vite port
-    'http://localhost:5173'  // Primary Vite port
+    'http://localhost:5173', // Primary Vite port
   ],
   credentials: true,
 }));
