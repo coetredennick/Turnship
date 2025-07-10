@@ -48,6 +48,9 @@ jspm_packages/
 .env.test.local
 .env.production.local
 
+# OAuth credentials
+client_secret_*.json
+
 # Parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -107,5 +110,4 @@ coverage/
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
-Thumbs.db
+ehthumbs.dbThumbs.db

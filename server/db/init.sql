@@ -45,5 +45,5 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   scope TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id)
-);
+  UNIQUE(user_id),
+  FOREIGN KEY (user_id) REFERENCES users(id));

@@ -3,6 +3,17 @@ const { getUserTokens, updateUserTokens } = require('../db/connection');
 const { createOAuth2Client } = require('../services/oauth');
 
 const requireAuth = (req, res, next) => {
+  // DEVELOPMENT MODE: Create mock user if none exists
+  if (process.env.NODE_ENV === 'development' && !req.user) {
+    req.user = {
+      id: 1,
+      email: 'coetredfsu@gmail.com',
+      name: 'Dev User',
+    };
+    console.log('Development mode: Mock user created for API request');
+    return next();
+  }
+
   if (!req.user) {
     return res.status(401).json({
       error: 'Authentication required',
@@ -31,7 +42,7 @@ const refreshTokenIfNeeded = async (req, res, next) => {
     }
 
     const now = new Date();
-    const expiresAt = new Date(tokens.expiresAt);
+    const expiresAt = new Date(tokens.tokenExpiry);
     const fiveMinutesFromNow = new Date(now.getTime() + (5 * 60 * 1000));
 
     if (expiresAt <= fiveMinutesFromNow) {
@@ -86,8 +97,8 @@ const createGoogleAuthClient = async (userId) => {
   );
 
   oauth2Client.setCredentials({
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
   });
 
   return oauth2Client;

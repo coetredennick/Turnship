@@ -33,5 +33,8 @@
     "student"
   ],
   "author": "Amy Johnson",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^5.8.3"
+  }
 }

@@ -139,10 +139,10 @@ describe('Database Operations', () => {
     describe('getUserTokens', () => {
       it('should retrieve user tokens', async () => {
         const expectedTokens = {
-          user_id: 1,
-          access_token: 'test-access-token',
-          refresh_token: 'test-refresh-token',
-          token_expiry: new Date(Date.now() + 3600000).toISOString(),
+          userId: 1,
+          accessToken: 'test-access-token',
+          refreshToken: 'test-refresh-token',
+          tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
           scope: 'profile email gmail.readonly',
         };
 
