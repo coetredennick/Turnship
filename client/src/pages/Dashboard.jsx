@@ -37,6 +37,9 @@ const Dashboard = () => {
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [connectionToEdit, setConnectionToEdit] = useState(null);
+  
+  // Expandable connections state
+  const [expandedConnections, setExpandedConnections] = useState(new Set());
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -206,6 +209,19 @@ const Dashboard = () => {
     loadConnections();
     setShowEditModal(false);
     setConnectionToEdit(null);
+  };
+
+  // Toggle expanded state for connections
+  const toggleExpanded = (connectionId) => {
+    setExpandedConnections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(connectionId)) {
+        newSet.delete(connectionId);
+      } else {
+        newSet.add(connectionId);
+      }
+      return newSet;
+    });
   };
 
   const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
@@ -522,9 +538,27 @@ const Dashboard = () => {
                               {connection.full_name?.charAt(0) || '?'}
                             </span>
                           </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-900">{connection.full_name}</h4>
-                            <p className="text-sm text-gray-500">{connection.email}</p>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="text-sm font-medium text-gray-900">{connection.full_name}</h4>
+                                <p className="text-sm text-gray-500">{connection.email}</p>
+                              </div>
+                              <button
+                                onClick={() => toggleExpanded(connection.id)}
+                                className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                                aria-label={expandedConnections.has(connection.id) ? "Collapse details" : "Expand details"}
+                              >
+                                <svg 
+                                  className={`w-4 h-4 transition-transform duration-200 ${expandedConnections.has(connection.id) ? 'transform rotate-180' : ''}`}
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
                         </div>
                         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
@@ -613,6 +647,112 @@ const Dashboard = () => {
                         </button>
                       </div>
                     </div>
+                    
+                    {/* Expandable Content */}
+                    {expandedConnections.has(connection.id) && (
+                      <div className="mt-4 pt-4 border-t border-gray-200 bg-gray-50 -mx-6 px-6 py-4 rounded-b-lg transition-all duration-300 ease-in-out">
+                        <div className="space-y-4">
+                          {/* Full Connection Description */}
+                          {connection.custom_connection_description && (
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">Connection Description</h5>
+                              <p className="text-sm text-gray-900 leading-relaxed">{connection.custom_connection_description}</p>
+                            </div>
+                          )}
+                          
+                          {/* Full Notes */}
+                          {connection.notes && (
+                            <div>
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">Notes</h5>
+                              <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">{connection.notes}</p>
+                            </div>
+                          )}
+                          
+                          {/* Timestamps and Metadata */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Timeline</h5>
+                              <div className="space-y-1">
+                                <div>
+                                  <span className="font-medium text-gray-700">Created:</span>
+                                  <span className="ml-2 text-gray-900">
+                                    {new Date(connection.created_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </span>
+                                </div>
+                                {connection.updated_at && connection.updated_at !== connection.created_at && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Updated:</span>
+                                    <span className="ml-2 text-gray-900">
+                                      {new Date(connection.updated_at).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                                {connection.last_email_sent_date && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Last Email:</span>
+                                    <span className="ml-2 text-gray-900">
+                                      {new Date(connection.last_email_sent_date).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric'
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Details</h5>
+                              <div className="space-y-1">
+                                {connection.industry && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Industry:</span>
+                                    <span className="ml-2 text-gray-900">{connection.industry}</span>
+                                  </div>
+                                )}
+                                {connection.connection_type && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Connection Type:</span>
+                                    <span className="ml-2 text-gray-900">{connection.connection_type}</span>
+                                  </div>
+                                )}
+                                {connection.initial_purpose && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Initial Purpose:</span>
+                                    <span className="ml-2 text-gray-900">
+                                      {connection.initial_purpose === 'summer-internship' ? 'Summer Internship' : 
+                                       connection.initial_purpose === 'just-reaching-out' ? 'Just Reaching Out' : 
+                                       'Advice'}
+                                    </span>
+                                  </div>
+                                )}
+                                {connection.last_email_draft && (
+                                  <div>
+                                    <span className="font-medium text-gray-700">Draft Status:</span>
+                                    <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">
+                                      Has Draft
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
