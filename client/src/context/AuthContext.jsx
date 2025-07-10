@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authAPI, handleAPIError } from '../services/api';
 
-// DEVELOPMENT MODE: Mock authenticated user
-const initialState = {
+// Default unauthenticated state used for tests and production
+const defaultState = {
+  user: null,
+  authenticated: false,
+  loading: true,
+  error: null
+};
+
+// In development we mock an authenticated user to simplify manual testing.
+const devState = {
   user: {
     id: 1,
     email: 'coetredfsu@gmail.com',
@@ -12,6 +20,8 @@ const initialState = {
   loading: false,
   error: null
 };
+
+const initialState = process.env.NODE_ENV === 'development' ? devState : defaultState;
 
 // Auth action types
 const AUTH_ACTIONS = {
@@ -71,10 +81,31 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // DEVELOPMENT MODE: Mock auth check - always return authenticated
+  // Validate current auth status with the API unless in development mode
   const checkAuth = async () => {
-    // Skip API call in development
-    console.log('Development mode: Auth check bypassed');
+    dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+
+    // In development we simply use the mock user to avoid network calls
+    if (process.env.NODE_ENV === 'development') {
+      dispatch({ type: AUTH_ACTIONS.SET_USER, payload: devState.user });
+      return;
+    }
+
+    try {
+      const response = await authAPI.checkAuth();
+      dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.data.user });
+    } catch (error) {
+      if (error?.response?.status === 401) {
+        // Not authenticated is not considered an error
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
+      } else {
+        const errorMessage = handleAPIError(
+          error,
+          'Failed to check authentication status'
+        );
+        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
+      }
+    }
   };
 
   // Login function (redirects to OAuth)

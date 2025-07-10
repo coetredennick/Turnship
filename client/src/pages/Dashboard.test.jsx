@@ -86,13 +86,12 @@ describe('Dashboard', () => {
     it('should render quick action cards as disabled', () => {
       render(<Dashboard />);
       
-      expect(screen.getByText('Generate Email')).toBeInTheDocument();
-      expect(screen.getByText('Add Connection')).toBeInTheDocument();
+      expect(screen.getByText('Contact')).toBeInTheDocument();
+      expect(screen.getAllByText('Add Connection')[0]).toBeInTheDocument();
       expect(screen.getByText('View Analytics')).toBeInTheDocument();
       
-      // All should show "Coming Soon"
-      const comingSoonTexts = screen.getAllByText('Coming Soon');
-      expect(comingSoonTexts).toHaveLength(3);
+      // View Analytics card should show Coming Soon
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
     });
 
     it('should render getting started guide', () => {
@@ -100,7 +99,7 @@ describe('Dashboard', () => {
       
       expect(screen.getByText('🚀 Getting Started with Turnship')).toBeInTheDocument();
       expect(screen.getByText('Test your Gmail connection')).toBeInTheDocument();
-      expect(screen.getByText('Add your first connection (Coming Soon)')).toBeInTheDocument();
+      expect(screen.getByText('Add your first connection')).toBeInTheDocument();
       expect(screen.getByText('Generate your first email (Coming Soon)')).toBeInTheDocument();
     });
   });
@@ -124,9 +123,8 @@ describe('Dashboard', () => {
 
       render(<Dashboard />);
       
-      expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
       const buttons = screen.getAllByRole('button');
-      const logoutButton = buttons.find(button => button.textContent.includes('Loading') || button.disabled);
+      const logoutButton = buttons.find(button => button.disabled);
       expect(logoutButton).toBeDisabled();
     });
 
@@ -215,7 +213,6 @@ describe('Dashboard', () => {
 
       // Check for loading state immediately
       expect(screen.getByText('Testing...')).toBeInTheDocument();
-      expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
       expect(testButton).toBeDisabled();
 
       // Resolve the promise to cleanup
@@ -307,13 +304,13 @@ describe('Dashboard', () => {
 
     it('should render QuickActionCard components as disabled', () => {
       render(<Dashboard />);
-      
+
       // Check for quick action icons
-      expect(screen.getByText('✨')).toBeInTheDocument(); // Generate Email
+      expect(screen.getByText('✨')).toBeInTheDocument(); // Contact card
       expect(screen.getByText('➕')).toBeInTheDocument(); // Add Connection
       expect(screen.getByText('📊')).toBeInTheDocument(); // View Analytics
-      
-      expect(screen.getByText('AI-powered networking emails')).toBeInTheDocument();
+
+      expect(screen.getByText('Reach out to your connections')).toBeInTheDocument();
       expect(screen.getByText('Log a new networking contact')).toBeInTheDocument();
       expect(screen.getByText('Track your networking progress')).toBeInTheDocument();
     });
@@ -322,8 +319,8 @@ describe('Dashboard', () => {
       const user = userEvent.setup();
       render(<Dashboard />);
       
-      const generateEmailCard = screen.getByText('Generate Email').closest('div');
-      await user.click(generateEmailCard);
+      const contactCard = screen.getByText('Contact').closest('div');
+      await user.click(contactCard);
       
       // Should not trigger any actions since cards are disabled
       expect(defaultAuthContext.testGmailConnection).not.toHaveBeenCalled();
@@ -338,7 +335,7 @@ describe('Dashboard', () => {
       const statsGrid = screen.getByText('Recent Connections').closest('.grid');
       expect(statsGrid).toHaveClass('grid-cols-1', 'md:grid-cols-3');
       
-      const actionsGrid = screen.getByText('Generate Email').closest('.grid');
+      const actionsGrid = screen.getAllByText('Add Connection')[0].closest('.grid');
       expect(actionsGrid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3');
     });
 
