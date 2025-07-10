@@ -3,41 +3,28 @@ import React, { useState } from 'react';
 const StatusBadge = ({ status, editable = false, onStatusChange, connectionId }) => {
   const [isEditing, setIsEditing] = useState(false);
 
-  // All available status options
+  // Simplified 5-status system with intelligent backend detection
   const statusOptions = [
     'Not Contacted',
-    'First Impression (draft)',
-    'First Impression (sent)',
-    'First Impression (nr)',
-    'Follow-up (draft)', 
-    'Follow-up (sent)',
-    'Responded - Positive',
-    'Responded - Negative',
-    'Responded - Neutral',
+    'First Impression',
+    'Follow-up',
+    'Response',
     'Meeting Scheduled'
   ];
 
-  // Get badge color based on status
+  // Get badge color based on simplified 5-status system
   const getBadgeColor = (status) => {
     switch (status) {
       case 'Not Contacted':
         return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'First Impression (draft)':
-      case 'Follow-up (draft)':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'First Impression (sent)':
-      case 'Follow-up (sent)':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'First Impression (nr)':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'Responded - Positive':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'Responded - Negative':
-        return 'bg-red-100 text-red-700 border-red-200';
-      case 'Responded - Neutral':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'First Impression':
+        return 'bg-blue-100 text-blue-700 border-blue-200'; // Professional/active
+      case 'Follow-up':
+        return 'bg-orange-100 text-orange-700 border-orange-200'; // Ongoing relationship
+      case 'Response':
+        return 'bg-purple-100 text-purple-700 border-purple-200'; // Interaction received
       case 'Meeting Scheduled':
-        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        return 'bg-green-100 text-green-700 border-green-200'; // Success/progress
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }

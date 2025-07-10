@@ -78,14 +78,9 @@ const validateConnectionData = (data, isUpdate = false) => {
   if (data.email_status) {
     const validStatuses = [
       'Not Contacted',
-      'First Impression (draft)',
-      'First Impression (sent)',
-      'First Impression (nr)',
-      'Follow-up (draft)', 
-      'Follow-up (sent)',
-      'Responded - Positive',
-      'Responded - Negative',
-      'Responded - Neutral',
+      'First Impression',
+      'Follow-up',
+      'Response',
       'Meeting Scheduled'
     ];
     

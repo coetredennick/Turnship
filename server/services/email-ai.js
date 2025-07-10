@@ -1,19 +1,13 @@
 const { OpenAI } = require('openai');
+const { DEV_USER_PROFILE, STATUS_CONTEXT_TEMPLATES, PURPOSE_FRAMEWORKS } = require('../config/dev-profile');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Default user profile (hardcoded for now)
-const DEFAULT_USER_PROFILE = {
-  name: 'Amy Chen',
-  university: 'Stanford University',
-  major: 'Computer Science',
-  graduationYear: '2025',
-  currentRole: 'Student',
-  interests: 'artificial intelligence, networking automation, tech entrepreneurship'
-};
+// Enhanced user profile with comprehensive details
+const DEFAULT_USER_PROFILE = DEV_USER_PROFILE;
 
 // Purpose-specific prompt templates
 const PURPOSE_PROMPTS = {
@@ -243,6 +237,110 @@ const adjustTone = (content, tone) => {
   }
 };
 
+// Helper function to determine current stage based on connection data
+const determineCurrentStage = (connectionData) => {
+  const { last_email_sent_date, last_email_draft } = connectionData;
+  
+  // If email has been sent, we're in "Email Sent" stage
+  if (last_email_sent_date) {
+    return 'Email Sent';
+  }
+  
+  // If there's a draft saved, we're in "Draft Made" stage
+  if (last_email_draft && last_email_draft.trim().length > 0) {
+    return 'Draft Made';
+  }
+  
+  // Otherwise, we're in "Not Started" stage
+  return 'Not Started';
+};
+
+// Helper function to detect response type for "Response" status
+const detectResponseType = (connectionData) => {
+  const { custom_connection_description, notes } = connectionData;
+  const content = (custom_connection_description || notes || '').toLowerCase();
+  
+  // Enhanced negative indicators (checked FIRST since negative responses often contain polite positive language)
+  const negativeKeywords = [
+    'not available', 'not interested', 'not a good fit', 'not the right time', 'not at this time',
+    'busy', 'can\'t', 'cannot', 'unable', 'decline', 'pass',
+    'thanks but', 'appreciate but', 'unfortunately', 'no thank you',
+    'not looking', 'not currently', 'not right now', 'too busy',
+    'can\'t make', 'won\'t be able', 'have to pass', 'will have to decline'
+  ];
+  
+  // Enhanced positive indicators
+  const positiveKeywords = [
+    'yes', 'absolutely', 'definitely', 'interested', 'would love', 'sounds great',
+    'happy to', 'excited', 'looking forward', 'let\'s schedule', 'let\'s meet',
+    'coffee', 'lunch', 'call me', 'meeting', 'available for', 'free to',
+    'works for me', 'perfect', 'great idea', 'love to chat'
+  ];
+  
+  // Strong negative phrases (exact matches for common polite rejections)
+  const negativeExactPhrases = [
+    'thanks for reaching out, but',
+    'appreciate your interest, but',
+    'thank you for thinking of me, but',
+    'i\'m flattered, but'
+  ];
+  
+  // Check for exact negative phrases first
+  if (negativeExactPhrases.some(phrase => content.includes(phrase))) {
+    console.log(`[Response Detection] Found exact negative phrase in: "${content}"`);
+    return 'negative';
+  }
+  
+  // Check for negative keywords (prioritized over positive)
+  if (negativeKeywords.some(keyword => content.includes(keyword))) {
+    console.log(`[Response Detection] Found negative keyword in: "${content}"`);
+    return 'negative';
+  }
+  
+  // Check for positive response (only if no negative indicators found)
+  if (positiveKeywords.some(keyword => content.includes(keyword))) {
+    console.log(`[Response Detection] Found positive keyword in: "${content}"`);
+    return 'positive';
+  }
+  
+  // Default to neutral
+  console.log(`[Response Detection] No clear indicators, defaulting to neutral for: "${content}"`);
+  return 'neutral';
+};
+
+// Helper function to get intelligent status context based on stage and sub-status
+const getIntelligentStatusContext = (baseStatusContext, emailStatus, currentStage, connectionData) => {
+  // Start with base context
+  let intelligentContext = { ...baseStatusContext };
+  
+  // Apply stage-specific context if available
+  if (baseStatusContext.stageContexts && baseStatusContext.stageContexts[currentStage]) {
+    intelligentContext = {
+      ...intelligentContext,
+      ...baseStatusContext.stageContexts[currentStage]
+    };
+  }
+  
+  // Special handling for "Response" status with sub-type detection
+  if (emailStatus === 'Response' && baseStatusContext.responseTypes) {
+    const responseType = detectResponseType(connectionData);
+    const responseTypeContext = baseStatusContext.responseTypes[responseType];
+    
+    if (responseTypeContext) {
+      intelligentContext = {
+        ...intelligentContext,
+        ...responseTypeContext,
+        responseType: responseType // Add detected response type for reference
+      };
+    }
+  }
+  
+  // Add stage information for reference
+  intelligentContext.currentStage = currentStage;
+  
+  return intelligentContext;
+};
+
 // Retry wrapper function with exponential backoff for OpenAI API calls
 const retryWithBackoff = async (fn, maxRetries = 3) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -275,6 +373,115 @@ const retryWithBackoff = async (fn, maxRetries = 3) => {
   }
 };
 
+// Enhanced context builder for status-aware email generation with intelligent sub-status handling
+const buildEnhancedContext = (connectionData, userProfile, options) => {
+  const { full_name, company, job_title, industry, email_status, custom_connection_description, notes, last_email_sent_date } = connectionData;
+  
+  // Get base status context
+  const baseStatusContext = STATUS_CONTEXT_TEMPLATES[email_status] || STATUS_CONTEXT_TEMPLATES['Not Contacted'];
+  
+  // Determine current stage for intelligent context selection
+  const currentStage = determineCurrentStage(connectionData);
+  
+  // Get intelligent status context based on stage and sub-status
+  const statusContext = getIntelligentStatusContext(baseStatusContext, email_status, currentStage, connectionData);
+  
+  // Get purpose framework
+  const purposeFramework = PURPOSE_FRAMEWORKS[options.purpose] || PURPOSE_FRAMEWORKS['just-reaching-out'];
+  
+  // Build rich context object
+  return {
+    // Connection details
+    connection: {
+      name: full_name,
+      company: company || 'their company',
+      role: job_title || 'their role',
+      industry: industry || 'their industry',
+      customDescription: custom_connection_description || notes || '',
+      currentStatus: email_status || 'Not Contacted'
+    },
+    
+    // Enhanced user profile context
+    user: {
+      ...userProfile,
+      // Build achievement highlights for relevant context
+      keyAchievements: userProfile.achievements.slice(0, 2).map(a => 
+        `${a.title}${a.company ? ` at ${a.company}` : ''} - ${a.description}`
+      ),
+      // Extract relevant technical skills
+      relevantSkills: userProfile.technicalSkills.slice(0, 4).join(', '),
+      // Format interests for natural language
+      coreInterests: userProfile.interests.join(', '),
+      personalHobbies: userProfile.personalInterests.slice(0, 2).join(' and ')
+    },
+    
+    // Status-based messaging approach
+    status: statusContext,
+    
+    // Purpose-driven conversation framework
+    purpose: purposeFramework,
+    
+    // Generation preferences
+    preferences: {
+      tone: options.tone,
+      length: options.length,
+      formality: userProfile.communicationStyle.formality,
+      personality: userProfile.communicationStyle.personality
+    }
+  };
+};
+
+// Enhanced prompt template that uses rich context
+const buildContextAwarePrompt = (context, aiPurpose) => {
+  const { connection, user, status, purpose, preferences } = context;
+  
+  return `You are ${user.name}, a ${user.year} ${user.major} student at ${user.university} graduating in ${user.graduationYear}. 
+
+STUDENT BACKGROUND:
+- Academic: ${user.gpa} GPA, relevant coursework in ${user.relevantCoursework.slice(0, 2).join(' and ')}
+- Experience: ${user.keyAchievements.join('; ')}
+- Technical Skills: ${user.relevantSkills}
+- Interests: ${user.coreInterests}
+- Personal: Enjoys ${user.personalHobbies}
+- Unique Value: ${user.uniqueValue}
+
+CONNECTION CONTEXT:
+- Recipient: ${connection.name}${connection.role ? `, ${connection.role}` : ''}${connection.company ? ` at ${connection.company}` : ''}
+- Industry: ${connection.industry}
+- Relationship Status: ${connection.currentStatus}
+- Connection Notes: ${connection.customDescription || 'No specific context provided'}
+
+MESSAGING APPROACH (Based on Status):
+- Approach: ${status.approach}
+- Tone: ${status.tone}
+- Context: ${status.context}
+- Call to Action: ${status.callToAction}
+
+PURPOSE FRAMEWORK (${purpose.primaryGoal}):
+- Key Messages: ${purpose.keyMessages.join(', ')}
+- Conversation Flow: ${purpose.conversationFlow.join(' → ')}
+
+GENERATION PREFERENCES:
+- Tone: ${preferences.tone}
+- Length: ${preferences.length}
+- Style: ${preferences.formality}, ${preferences.personality}
+
+Generate a professional networking email that:
+1. Uses the appropriate ${status.approach} approach for someone with ${connection.currentStatus} status
+2. Incorporates relevant details from your background that connect to their ${connection.industry} work
+3. Follows the ${purpose.primaryGoal} conversation framework
+4. Maintains a ${preferences.tone} tone throughout
+5. Includes a compelling subject line
+6. ${status.context === 'first impression' ? 'Makes a strong first impression' : `Acknowledges ${status.context}`}
+7. Ends with a ${status.callToAction}
+
+Format your response as:
+SUBJECT: [compelling subject line]
+
+EMAIL:
+[personalized email body]`;
+};
+
 // Core function to generate networking email
 const generateNetworkingEmail = async (connectionData, userProfile = DEFAULT_USER_PROFILE, options) => {
   try {
@@ -291,15 +498,11 @@ const generateNetworkingEmail = async (connectionData, userProfile = DEFAULT_USE
     const aiPurpose = mapCollegePurposeToAI(options.purpose);
     const aiTone = mapCollegeToneToAI(options.tone);
     
-    // Get purpose-specific prompt
-    const purposeConfig = PURPOSE_PROMPTS[aiPurpose];
-    if (!purposeConfig) {
-      throw new Error(`Unsupported purpose: ${options.purpose} (mapped to ${aiPurpose})`);
-    }
-
-    // Generate the prompt with mapped options
-    const mappedOptions = { ...options, purpose: aiPurpose, tone: aiTone };
-    let prompt = purposeConfig.template(connectionData, userProfile, mappedOptions);
+    // Build enhanced context for status-aware generation
+    const enhancedContext = buildEnhancedContext(connectionData, userProfile, options);
+    
+    // Generate context-aware prompt
+    let prompt = buildContextAwarePrompt(enhancedContext, aiPurpose);
     
     // Adjust for length and tone (use original options for tone descriptions)
     prompt = adjustContentLength(prompt, options.length);
@@ -312,7 +515,7 @@ const generateNetworkingEmail = async (connectionData, userProfile = DEFAULT_USE
         messages: [
           {
             role: 'system',
-            content: purposeConfig.instruction
+            content: 'You are an expert at writing personalized, professional networking emails for college students. Generate emails that are authentic, contextually appropriate, and relationship-stage aware. Use the provided context to create compelling, personalized outreach that builds genuine professional connections.'
           },
           {
             role: 'user',

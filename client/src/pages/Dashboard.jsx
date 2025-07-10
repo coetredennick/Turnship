@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import AddConnectionForm from '../components/AddConnectionForm';
 import EmailGenerationModal from '../components/EmailGenerationModal';
 import EmailComposer, { ConnectionSelectorModal, DraftBankModal } from '../components/EmailComposer';
+import EditConnectionModal from '../components/EditConnectionModal';
 import StatusBadge from '../components/StatusBadge';
 import { InlineLoading } from '../components/Loading';
 import { connectionsAPI, authAPI, handleAPIError } from '../services/api';
@@ -32,6 +33,10 @@ const Dashboard = () => {
   
   // Email composer state
   const [showEmailComposer, setShowEmailComposer] = useState(false);
+  
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [connectionToEdit, setConnectionToEdit] = useState(null);
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -150,12 +155,12 @@ const Dashboard = () => {
     console.log('Draft saved for connection:', connectionId);
   };
 
-  // Handle manual status change
+  // Handle manual status change (simplified for new 5-status system)
   const handleStatusChange = async (connectionId, newStatus) => {
     try {
+      // Only update the email_status - backend handles intelligent detection
       await connectionsAPI.updateConnection(connectionId, { 
-        email_status: newStatus,
-        last_email_sent_date: newStatus.includes('(sent)') ? Date.now() : null 
+        email_status: newStatus
       });
       // Refresh connections to show updated status
       loadConnections();
@@ -188,6 +193,19 @@ const Dashboard = () => {
     // Refresh connections to update draft status
     loadConnections();
     console.log('Draft deleted for connection:', connectionId);
+  };
+
+  // Handle edit connection
+  const handleEditConnection = (connection) => {
+    setConnectionToEdit(connection);
+    setShowEditModal(true);
+  };
+
+  // Handle connection updated
+  const handleConnectionUpdated = () => {
+    loadConnections();
+    setShowEditModal(false);
+    setConnectionToEdit(null);
   };
 
   const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
@@ -565,6 +583,15 @@ const Dashboard = () => {
                           </svg>
                         </button>
                         <button
+                          onClick={() => handleEditConnection(connection)}
+                          className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
+                          title="Edit connection"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
                           onClick={() => handleDeleteConnection(connection.id)}
                           className="p-1 text-gray-400 hover:text-red-600 focus:outline-none"
                           title="Delete connection"
@@ -656,6 +683,14 @@ const Dashboard = () => {
           onEmailSent={handleEmailSent}
           onDraftSaved={handleDraftSaved}
           loadExistingDraft={loadExistingDraft}
+        />
+        
+        {/* Edit Connection Modal */}
+        <EditConnectionModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          connection={connectionToEdit}
+          onConnectionUpdated={handleConnectionUpdated}
         />
       </main>
     </div>

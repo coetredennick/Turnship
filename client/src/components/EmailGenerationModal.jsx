@@ -14,6 +14,8 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
   const [generatedEmails, setGeneratedEmails] = useState([]);
   const [error, setError] = useState(null);
   const [showResults, setShowResults] = useState(false);
+  const [savingDrafts, setSavingDrafts] = useState({});
+  const [draftSaveResults, setDraftSaveResults] = useState({});
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -22,26 +24,24 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
       setGeneratedEmails([]);
       setError(null);
       setShowResults(false);
+      setSavingDrafts({});
+      setDraftSaveResults({});
     }
   }, [isOpen]);
 
-  // Get email status badge color
+  // Get email status badge color (matching simplified 5-status system)
   const getStatusBadgeColor = (status) => {
     switch (status) {
       case 'Not Contacted':
         return 'bg-gray-100 text-gray-700';
-      case 'First Impression (draft)':
-      case 'Follow-up (draft)':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'First Impression (sent)':
-      case 'Follow-up (sent)':
-        return 'bg-blue-100 text-blue-700';
-      case 'Responded - Positive':
-        return 'bg-green-100 text-green-700';
-      case 'Responded - Negative':
-        return 'bg-red-100 text-red-700';
+      case 'First Impression':
+        return 'bg-blue-100 text-blue-700'; // Professional/active
+      case 'Follow-up':
+        return 'bg-orange-100 text-orange-700'; // Ongoing relationship
+      case 'Response':
+        return 'bg-purple-100 text-purple-700'; // Interaction received
       case 'Meeting Scheduled':
-        return 'bg-purple-100 text-purple-700';
+        return 'bg-green-100 text-green-700'; // Success/progress
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -120,6 +120,35 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
     setShowResults(false);
     setGeneratedEmails([]);
     setError(null);
+  };
+
+  // Handle save draft
+  const handleSaveDraft = async (email) => {
+    const connectionId = email.connectionId;
+    setSavingDrafts(prev => ({ ...prev, [connectionId]: true }));
+    setDraftSaveResults(prev => ({ ...prev, [connectionId]: null }));
+    
+    try {
+      const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
+      await emailsAPI.saveDraft(connectionId, draftContent);
+      setDraftSaveResults(prev => ({ 
+        ...prev, 
+        [connectionId]: { success: true, message: 'Draft saved successfully!' }
+      }));
+      
+      // Auto-hide success message after 3 seconds
+      setTimeout(() => {
+        setDraftSaveResults(prev => ({ ...prev, [connectionId]: null }));
+      }, 3000);
+    } catch (error) {
+      const errorMessage = handleAPIError(error, 'Failed to save draft');
+      setDraftSaveResults(prev => ({ 
+        ...prev, 
+        [connectionId]: { success: false, message: errorMessage }
+      }));
+    } finally {
+      setSavingDrafts(prev => ({ ...prev, [connectionId]: false }));
+    }
   };
 
   // Handle close modal
@@ -322,12 +351,39 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
                         <p className="text-sm text-gray-500">{email.recipient.email}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(`Subject: ${email.subject}\n\n${email.body}`)}
-                      className="text-sm text-blue-600 hover:text-blue-700 focus:outline-none"
-                    >
-                      Copy
-                    </button>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(`Subject: ${email.subject}\n\n${email.body}`)}
+                        className="text-sm text-blue-600 hover:text-blue-700 focus:outline-none"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        onClick={() => handleSaveDraft(email)}
+                        disabled={savingDrafts[email.connectionId] || draftSaveResults[email.connectionId]?.success}
+                        className={`text-sm focus:outline-none disabled:opacity-50 ${
+                          draftSaveResults[email.connectionId]?.success 
+                            ? 'text-green-600' 
+                            : 'text-green-600 hover:text-green-700'
+                        }`}
+                      >
+                        {savingDrafts[email.connectionId] ? (
+                          <>
+                            <InlineLoading size={12} className="mr-1" />
+                            Saving...
+                          </>
+                        ) : draftSaveResults[email.connectionId]?.success ? (
+                          <>
+                            <svg className="w-3 h-3 mr-1 inline" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                            Saved!
+                          </>
+                        ) : (
+                          'Save as Draft'
+                        )}
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <div>
@@ -341,6 +397,18 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Draft save feedback */}
+                  {draftSaveResults[email.connectionId] && !draftSaveResults[email.connectionId].success && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                      {draftSaveResults[email.connectionId].message}
+                    </div>
+                  )}
+                  {draftSaveResults[email.connectionId]?.success && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-600">
+                      {draftSaveResults[email.connectionId].message}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
