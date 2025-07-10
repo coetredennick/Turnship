@@ -495,8 +495,8 @@ const updateConnectionEmailStatus = (connectionId, status, sentDate = null) => n
 
 // Draft storage functions
 const saveEmailDraft = (connectionId, draftContent) => new Promise((resolve, reject) => {
-  if (!draftContent || typeof draftContent !== 'string') {
-    return reject(new Error('Draft content must be a non-empty string'));
+  if (typeof draftContent !== 'string') {
+    return reject(new Error('Draft content must be a string'));
   }
   
   const query = 'UPDATE connections SET last_email_draft = ?, updated_at = ? WHERE id = ?';

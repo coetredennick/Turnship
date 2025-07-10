@@ -49,7 +49,7 @@ const StatusBadge = ({ status, editable = false, onStatusChange, connectionId })
             onChange={(e) => handleStatusSelect(e.target.value)}
             onBlur={() => setIsEditing(false)}
             autoFocus
-            className="text-xs font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`text-xs font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-blue-500 ${getBadgeColor(status)}`}
           >
             {statusOptions.map((option) => (
               <option key={option} value={option}>

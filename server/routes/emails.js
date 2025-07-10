@@ -235,9 +235,9 @@ router.post('/generate', requireAuth, async (req, res) => {
     // Generate emails
     const generatedEmails = await generateEmailContent(connections, purpose, tone, length);
     
-    // Update email status to draft for all connections
+    // Update email status to First Impression for all connections
     await Promise.all(
-      connectionIds.map(id => updateConnectionEmailStatus(id, 'First Impression (draft)'))
+      connectionIds.map(id => updateConnectionEmailStatus(id, 'First Impression'))
     );
     
     return res.json({
@@ -273,10 +273,10 @@ router.put('/draft/:connectionId', requireAuth, async (req, res) => {
       });
     }
     
-    if (!draft || typeof draft !== 'string') {
+    if (typeof draft !== 'string') {
       return res.status(400).json({
         error: 'Invalid draft content',
-        message: 'Draft content is required and must be a string',
+        message: 'Draft content must be a string',
       });
     }
     

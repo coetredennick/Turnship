@@ -3,25 +3,35 @@ import { InlineLoading } from './Loading';
 import { emailsAPI, handleAPIError } from '../services/api';
 
 // Draft Bank Modal - Shows all saved drafts
-const DraftBankModal = ({ isOpen, onClose, connections, onDraftSelected, onDraftDeleted }) => {
+const DraftBankModal = ({ isOpen, onClose, connections, targetConnection, onDraftSelected, onDraftDeleted }) => {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load drafts when modal opens
+  // Load drafts when modal opens or target connection changes
   useEffect(() => {
     if (isOpen) {
       loadDrafts();
     }
-  }, [isOpen]);
+  }, [isOpen, targetConnection]);
 
   const loadDrafts = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Get all connections with drafts
-      const connectionsWithDrafts = connections.filter(conn => conn.last_email_draft);
-      setDrafts(connectionsWithDrafts);
+      if (targetConnection) {
+        // Show drafts only for the specific target connection
+        const connectionDrafts = targetConnection.last_email_draft && targetConnection.last_email_draft.trim() 
+          ? [targetConnection] 
+          : [];
+        setDrafts(connectionDrafts);
+      } else {
+        // Fallback: show all connections with drafts (shouldn't happen with new design)
+        const connectionsWithDrafts = connections.filter(conn => 
+          conn.last_email_draft && conn.last_email_draft.trim()
+        );
+        setDrafts(connectionsWithDrafts);
+      }
     } catch (error) {
       setError('Failed to load drafts');
       console.error('Error loading drafts:', error);
@@ -67,7 +77,16 @@ const DraftBankModal = ({ isOpen, onClose, connections, onDraftSelected, onDraft
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Draft Bank</h2>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {targetConnection ? `Drafts for ${targetConnection.full_name}` : 'Draft Bank'}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {targetConnection 
+                  ? `Email drafts saved for ${targetConnection.full_name}` 
+                  : 'All your saved email drafts across all connections'}
+              </p>
+            </div>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 focus:outline-none"
@@ -94,8 +113,14 @@ const DraftBankModal = ({ isOpen, onClose, connections, onDraftSelected, onDraft
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                 <span className="text-2xl">📝</span>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No drafts yet</h3>
-              <p className="text-gray-500">Your saved email drafts will appear here.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {targetConnection ? `No drafts for ${targetConnection.full_name}` : 'No drafts yet'}
+              </h3>
+              <p className="text-gray-500">
+                {targetConnection 
+                  ? `Email drafts saved for ${targetConnection.full_name} will appear here.`
+                  : 'Your saved email drafts will appear here.'}
+              </p>
             </div>
           ) : (
             <div className="space-y-4 max-h-96 overflow-y-auto">

@@ -15,6 +15,7 @@ const Dashboard = () => {
   const [showContactDropdown, setShowContactDropdown] = useState(false);
   const [showConnectionSelector, setShowConnectionSelector] = useState(false);
   const [showDraftBank, setShowDraftBank] = useState(false);
+  const [draftBankConnection, setDraftBankConnection] = useState(null);
   const [loadExistingDraft, setLoadExistingDraft] = useState(true);
 
   // Gmail testing state
@@ -618,7 +619,10 @@ const Dashboard = () => {
                       </div>
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => setShowDraftBank(true)}
+                          onClick={() => {
+                            setDraftBankConnection(connection);
+                            setShowDraftBank(true);
+                          }}
                           className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
                           title="View Drafts"
                         >
@@ -819,8 +823,12 @@ const Dashboard = () => {
         {/* Draft Bank Modal */}
         <DraftBankModal
           isOpen={showDraftBank}
-          onClose={() => setShowDraftBank(false)}
+          onClose={() => {
+            setShowDraftBank(false);
+            setDraftBankConnection(null);
+          }}
           connections={connections}
+          targetConnection={draftBankConnection}
           onDraftSelected={handleDraftSelected}
           onDraftDeleted={handleDraftDeleted}
         />
