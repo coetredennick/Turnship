@@ -12,8 +12,8 @@ const actualStatuses = Object.keys(STATUS_CONTEXT_TEMPLATES);
 console.log('Expected statuses:', expectedStatuses);
 console.log('Actual statuses:', actualStatuses);
 
-const missingStatuses = expectedStatuses.filter(status => !actualStatuses.includes(status));
-const extraStatuses = actualStatuses.filter(status => !expectedStatuses.includes(status));
+const missingStatuses = expectedStatuses.filter((status) => !actualStatuses.includes(status));
+const extraStatuses = actualStatuses.filter((status) => !expectedStatuses.includes(status));
 
 if (missingStatuses.length === 0 && extraStatuses.length === 0) {
   console.log('✅ STATUS_CONTEXT_TEMPLATES updated correctly\n');
@@ -26,11 +26,11 @@ if (missingStatuses.length === 0 && extraStatuses.length === 0) {
 
 // Test 2: Verify each status has required properties
 console.log('2. Testing status template structure:');
-expectedStatuses.forEach(status => {
+expectedStatuses.forEach((status) => {
   const template = STATUS_CONTEXT_TEMPLATES[status];
   const requiredProps = ['approach', 'tone', 'context', 'callToAction', 'description', 'progressStages'];
-  const missingProps = requiredProps.filter(prop => !template || !template[prop]);
-  
+  const missingProps = requiredProps.filter((prop) => !template || !template[prop]);
+
   if (missingProps.length === 0) {
     console.log(`✅ ${status}: All properties present`);
   } else {
@@ -40,13 +40,13 @@ expectedStatuses.forEach(status => {
 
 // Test 3: Verify validation accepts new statuses
 console.log('\n3. Testing validation function:');
-expectedStatuses.forEach(status => {
+expectedStatuses.forEach((status) => {
   const testData = {
     email: 'test@example.com',
     full_name: 'Test User',
-    email_status: status
+    email_status: status,
   };
-  
+
   try {
     // Note: We can't directly test validateConnectionData since it's not exported
     // But we've updated the validStatuses array in the routes file
@@ -58,7 +58,7 @@ expectedStatuses.forEach(status => {
 
 console.log('\n🎉 New 5-status system testing complete!');
 console.log('\nStatus Summary:');
-expectedStatuses.forEach(status => {
+expectedStatuses.forEach((status) => {
   const template = STATUS_CONTEXT_TEMPLATES[status];
   console.log(`\n📋 ${status}:`);
   console.log(`   Description: ${template.description}`);

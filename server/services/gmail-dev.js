@@ -6,15 +6,15 @@ class GmailDevService {
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      process.env.GOOGLE_REDIRECT_URI,
     );
-    
+
     // Set credentials from environment variables
     this.oauth2Client.setCredentials({
       access_token: process.env.DEV_ACCESS_TOKEN,
       refresh_token: process.env.DEV_REFRESH_TOKEN,
     });
-    
+
     this.gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
   }
 
@@ -35,7 +35,7 @@ class GmailDevService {
       const response = await this.gmail.users.messages.list({
         userId: 'me',
         q: query,
-        maxResults: maxResults,
+        maxResults,
       });
       return response.data;
     } catch (error) {
@@ -66,7 +66,7 @@ class GmailDevService {
         `To: ${to}`,
         `Subject: ${subject}`,
         '',
-        body
+        body,
       ].join('\n');
 
       const encodedMessage = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
@@ -102,9 +102,9 @@ class GmailDevService {
       'subject:introduction',
       'subject:connect',
       'subject:follow up',
-      'subject:meeting'
+      'subject:meeting',
     ];
-    
+
     try {
       const results = [];
       for (const query of queries) {

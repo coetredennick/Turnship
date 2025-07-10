@@ -356,7 +356,7 @@ describe('Auth Middleware', () => {
         .mockResolvedValueOnce({
           accessToken: 'token1',
           refreshToken: 'refresh1',
-        tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
+          tokenExpiry: new Date(Date.now() + 3600000).toISOString(),
         })
         .mockResolvedValueOnce({
           accessToken: 'token2',

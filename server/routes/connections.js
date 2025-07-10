@@ -14,67 +14,67 @@ const router = express.Router();
 // Validation helper
 const validateConnectionData = (data, isUpdate = false) => {
   const errors = [];
-  
+
   if (!isUpdate && !data.email) {
     errors.push('Email is required');
   }
-  
+
   if (!isUpdate && !data.full_name) {
     errors.push('Full name is required');
   }
-  
+
   if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
     errors.push('Invalid email format');
   }
-  
+
   if (data.full_name && typeof data.full_name !== 'string') {
     errors.push('Full name must be a string');
   }
-  
+
   if (data.full_name && (data.full_name.length < 2 || data.full_name.length > 100)) {
     errors.push('Full name must be between 2 and 100 characters');
   }
-  
+
   if (data.company && typeof data.company !== 'string') {
     errors.push('Company must be a string');
   }
-  
+
   if (data.company && data.company.length > 100) {
     errors.push('Company name must not exceed 100 characters');
   }
-  
+
   if (data.connection_type && typeof data.connection_type !== 'string') {
     errors.push('Connection type must be a string');
   }
-  
+
   if (data.connection_type && data.connection_type.length > 50) {
     errors.push('Connection type must not exceed 50 characters');
   }
-  
+
   if (data.job_title && typeof data.job_title !== 'string') {
     errors.push('Job title must be a string');
   }
-  
+
   if (data.job_title && data.job_title.length > 100) {
     errors.push('Job title must not exceed 100 characters');
   }
-  
+
   if (data.industry && typeof data.industry !== 'string') {
     errors.push('Industry must be a string');
   }
-  
+
   if (data.industry && data.industry.length > 100) {
     errors.push('Industry must not exceed 100 characters');
   }
-  
+
   if (data.notes && typeof data.notes !== 'string') {
     errors.push('Notes must be a string');
   }
-  
+
   if (data.notes && data.notes.length > 1000) {
     errors.push('Notes must not exceed 1000 characters');
   }
-  
+
   // Validate email status if provided
   if (data.email_status) {
     const validStatuses = [
@@ -82,23 +82,23 @@ const validateConnectionData = (data, isUpdate = false) => {
       'First Impression',
       'Follow-up',
       'Response',
-      'Meeting Scheduled'
+      'Meeting Scheduled',
     ];
-    
+
     if (!validStatuses.includes(data.email_status)) {
       errors.push('Invalid email status');
     }
   }
-  
+
   // Validate custom_connection_description if provided
   if (data.custom_connection_description && typeof data.custom_connection_description !== 'string') {
     errors.push('Custom connection description must be a string');
   }
-  
+
   if (data.custom_connection_description && data.custom_connection_description.length > 500) {
     errors.push('Custom connection description must not exceed 500 characters');
   }
-  
+
   // Validate initial_purpose if provided
   if (data.initial_purpose) {
     const validPurposes = ['summer-internship', 'just-reaching-out', 'advice'];
@@ -106,23 +106,23 @@ const validateConnectionData = (data, isUpdate = false) => {
       errors.push('Invalid initial purpose');
     }
   }
-  
+
   // Validate last_email_draft if provided
   if (data.last_email_draft && typeof data.last_email_draft !== 'string') {
     errors.push('Last email draft must be a string');
   }
-  
+
   if (data.last_email_draft && data.last_email_draft.length > 10000) {
     errors.push('Last email draft must not exceed 10000 characters');
   }
-  
+
   // Validate last_email_sent_date if provided
   if (data.last_email_sent_date !== undefined && data.last_email_sent_date !== null) {
     if (typeof data.last_email_sent_date !== 'number' && typeof data.last_email_sent_date !== 'string') {
       errors.push('Last email sent date must be a valid timestamp');
     }
   }
-  
+
   return errors;
 };
 
@@ -131,7 +131,7 @@ router.post('/', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionData = req.body;
-    
+
     // Validate input
     const validationErrors = validateConnectionData(connectionData);
     if (validationErrors.length > 0) {
@@ -141,10 +141,10 @@ router.post('/', requireAuth, async (req, res) => {
         details: validationErrors,
       });
     }
-    
+
     // Create connection
     const connection = await createConnection(userId, connectionData);
-    
+
     return res.status(201).json({
       message: 'Connection created successfully',
       connection,
@@ -163,7 +163,7 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connections = await getConnectionsByUserId(userId);
-    
+
     return res.json({
       message: 'Connections retrieved successfully',
       connections,
@@ -183,23 +183,23 @@ router.get('/:id', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.id, 10);
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     const connection = await getConnectionById(connectionId);
-    
+
     if (!connection) {
       return res.status(404).json({
         error: 'Connection not found',
         message: 'The specified connection does not exist',
       });
     }
-    
+
     // Check if user owns this connection
     if (connection.user_id !== userId) {
       return res.status(403).json({
@@ -207,7 +207,7 @@ router.get('/:id', requireAuth, async (req, res) => {
         message: 'You do not have permission to access this connection',
       });
     }
-    
+
     return res.json({
       message: 'Connection retrieved successfully',
       connection,
@@ -227,14 +227,14 @@ router.put('/:id', requireAuth, async (req, res) => {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.id, 10);
     const updates = req.body;
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     // Validate input
     const validationErrors = validateConnectionData(updates, true);
     if (validationErrors.length > 0) {
@@ -244,7 +244,7 @@ router.put('/:id', requireAuth, async (req, res) => {
         details: validationErrors,
       });
     }
-    
+
     // Check if connection exists and user owns it
     const existingConnection = await getConnectionById(connectionId);
     if (!existingConnection) {
@@ -253,31 +253,31 @@ router.put('/:id', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (existingConnection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to update this connection',
       });
     }
-    
+
     // Update connection
     const updatedConnection = await updateConnection(connectionId, updates);
-    
+
     return res.json({
       message: 'Connection updated successfully',
       connection: updatedConnection,
     });
   } catch (error) {
     console.error('Error updating connection:', error);
-    
+
     if (error.message === 'No valid fields to update') {
       return res.status(400).json({
         error: 'No valid updates provided',
         message: 'At least one valid field must be provided for update',
       });
     }
-    
+
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to update connection',
@@ -290,14 +290,14 @@ router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.id, 10);
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     // Check if connection exists and user owns it
     const existingConnection = await getConnectionById(connectionId);
     if (!existingConnection) {
@@ -306,17 +306,17 @@ router.delete('/:id', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (existingConnection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to delete this connection',
       });
     }
-    
+
     // Delete connection
     await deleteConnection(connectionId);
-    
+
     return res.json({
       message: 'Connection deleted successfully',
       deleted: true,
@@ -335,14 +335,14 @@ router.post('/:id/composer-opened', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.id, 10);
-    
+
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
       });
     }
-    
+
     // Check if connection exists and user owns it
     const existingConnection = await getConnectionById(connectionId);
     if (!existingConnection) {
@@ -351,17 +351,17 @@ router.post('/:id/composer-opened', requireAuth, async (req, res) => {
         message: 'The specified connection does not exist',
       });
     }
-    
+
     if (existingConnection.user_id !== userId) {
       return res.status(403).json({
         error: 'Access forbidden',
         message: 'You do not have permission to access this connection',
       });
     }
-    
+
     // Track composer opened
     await trackComposerOpened(connectionId);
-    
+
     return res.json({
       message: 'Composer opened tracked successfully',
       tracked: true,
@@ -391,7 +391,7 @@ router.use((err, req, res, next) => {
     error: 'Connections service error',
     message: 'An error occurred in the connections service',
   });
-  
+
   return next(err);
 });
 
