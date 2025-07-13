@@ -7,7 +7,7 @@ import EditConnectionModal from '../components/EditConnectionModal';
 import StatusBadge from '../components/StatusBadge';
 import ConnectionCard from '../components/ConnectionCard';
 import { InlineLoading } from '../components/Loading';
-import { connectionsAPI, authAPI, handleAPIError } from '../services/api';
+import { connectionsAPI, authAPI, timelineAPI, handleAPIError } from '../services/api';
 
 const Dashboard = () => {
   const { user, logout, testGmailConnection, loading } = useAuth();
@@ -49,6 +49,9 @@ const Dashboard = () => {
   
   // Selected connections state for ConnectionCard
   const [selectedConnections, setSelectedConnections] = useState(new Set());
+  
+  // Timeline integration state
+  const [currentStageId, setCurrentStageId] = useState(null);
   
   // Email generation state for composer panel
   const [emailOptions, setEmailOptions] = useState({
@@ -153,18 +156,135 @@ const Dashboard = () => {
     };
   }, [showContactDropdown]);
 
-  // Load connections function
-  const loadConnections = async () => {
+  // Load connections function with timeline data and caching
+  const loadConnections = async (forceRefresh = false) => {
     setLoadingConnections(true);
     setConnectionsError(null);
     try {
       const response = await connectionsAPI.getConnections();
-      setConnections(response.data.connections || []);
+      const connections = response.data.connections || [];
+      
+      // Fetch timeline data for connections (with error resilience)
+      let connectionsWithTimeline;
+      try {
+        connectionsWithTimeline = await Promise.all(
+          connections.map(async (connection) => {
+            // Skip timeline fetch if we have cached data and not forcing refresh
+            if (!forceRefresh && connection.timeline) {
+              return connection;
+            }
+            
+            try {
+              const timelineResponse = await timelineAPI.getTimeline(connection.id);
+              return {
+                ...connection,
+                timeline: timelineResponse.data.timeline,
+                timelineLastFetched: Date.now() // Simple cache timestamp
+              };
+            } catch (timelineError) {
+              // Timeline API might not be ready yet (Phase 1) - gracefully fallback
+              console.info(`Timeline not available for connection ${connection.id} (this is normal in Phase 1):`, timelineError.response?.status || timelineError.message);
+              // Return connection with empty timeline if individual fetch fails
+              return {
+                ...connection,
+                timeline: { stages: [] },
+                timelineLastFetched: Date.now()
+              };
+            }
+          })
+        );
+      } catch (batchError) {
+        console.warn('Timeline batch fetch failed, using connections without timeline:', batchError);
+        // If entire batch fails, use connections without timeline data
+        connectionsWithTimeline = connections.map(conn => ({
+          ...conn,
+          timeline: { stages: [] }
+        }));
+      }
+      
+      setConnections(connectionsWithTimeline);
     } catch (error) {
       const errorMessage = handleAPIError(error, 'Failed to load connections');
       setConnectionsError(errorMessage);
     } finally {
       setLoadingConnections(false);
+    }
+  };
+
+  // Handle opening email viewer for sent stages (Phase 2 stub)
+  const openEmailViewer = (stage, connection) => {
+    console.log('Opening email viewer for stage:', stage, 'connection:', connection?.full_name);
+    // TODO: Phase 3+ - Implement actual email viewer/tracker component
+    alert(`Email sent for ${stage.stage_type} stage.\nConnection: ${connection.full_name}\nStage ID: ${stage.id}`);
+  };
+
+  // Handle opening response viewer for received stages (Phase 2 stub)
+  const openResponseViewer = (stage, connection) => {
+    console.log('Opening response viewer for stage:', stage, 'connection:', connection?.full_name);
+    // TODO: Phase 3+ - Implement actual response details component
+    alert(`Response received for ${stage.stage_type} stage.\nConnection: ${connection.full_name}\nStage ID: ${stage.id}`);
+  };
+
+  // Handle timeline updates from EmailComposer
+  const handleTimelineUpdated = (timelineData) => {
+    console.log('Timeline updated:', timelineData);
+    // Update the connection timeline in the local state
+    if (timelineData && selectedConnection) {
+      setConnections(prevConnections => 
+        prevConnections.map(conn => 
+          conn.id === selectedConnection.id 
+            ? { ...conn, timeline: timelineData.timeline || timelineData }
+            : conn
+        )
+      );
+    }
+  };
+
+  // Handle timeline stage click - Phase 2: Implement stage-specific actions
+  const handleStageClick = (stage, connection) => {
+    console.log('Stage clicked:', stage, 'for connection:', connection?.id);
+    
+    if (!connection) {
+      console.error('No connection provided for stage click');
+      return;
+    }
+    
+    switch (stage.stage_status) {
+      case 'waiting':
+        // Open composer for waiting stage (new email for this stage type)
+        console.log('Opening composer for waiting stage:', stage.stage_type);
+        setSelectedConnection(connection);
+        setCurrentStageId(stage.id); // Set stage ID for timeline integration
+        setLoadExistingDraft(false); // New email, not loading existing draft
+        setShowEmailComposer(true);
+        break;
+        
+      case 'draft':
+        // Open composer with existing draft for this stage
+        console.log('Opening composer with draft for stage:', stage.stage_type);
+        setSelectedConnection(connection);
+        setCurrentStageId(stage.id); // Set stage ID for timeline integration
+        setLoadExistingDraft(true); // Load existing draft
+        setShowEmailComposer(true);
+        break;
+        
+      case 'sent':
+        // Open email viewer/tracker for sent stage
+        openEmailViewer(stage, connection);
+        break;
+        
+      case 'received':
+        // Show response details for received stage  
+        openResponseViewer(stage, connection);
+        break;
+        
+      default:
+        console.warn('Unknown stage status:', stage.stage_status);
+        // Fallback: open composer as default action
+        setSelectedConnection(connection);
+        setCurrentStageId(stage.id); // Set stage ID for timeline integration
+        setLoadExistingDraft(false);
+        setShowEmailComposer(true);
     }
   };
 
@@ -692,6 +812,7 @@ const Dashboard = () => {
                     }}
                     onRemove={handleDeleteConnection}
                     onStatusChange={handleStatusChange}
+                    onStageClick={handleStageClick}
                   />
                 ))}
               </div>
@@ -924,12 +1045,17 @@ const Dashboard = () => {
       {/* Email Composer Modal */}
       <EmailComposer
         isOpen={showEmailComposer}
-        onClose={() => setShowEmailComposer(false)}
+        onClose={() => {
+          setShowEmailComposer(false);
+          setCurrentStageId(null); // Clear stage ID when closing
+        }}
         connection={selectedConnection}
         initialEmail={generatedEmailForComposer}
         onEmailSent={handleEmailSent}
         onDraftSaved={handleDraftSaved}
         loadExistingDraft={loadExistingDraft}
+        currentStageId={currentStageId}
+        onTimelineUpdated={handleTimelineUpdated}
       />
       
       {/* Edit Connection Modal */}

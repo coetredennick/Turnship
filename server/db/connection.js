@@ -3,166 +3,51 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, '..', 'dev.db');
 
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-    process.exit(1);
-  }
-  console.log('Connected to SQLite database');
-});
+// Factory function to create database instances
+function createDB(dbPath = DB_PATH) {
+  return new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Error opening database:', err.message);
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(1);
+      }
+    }
+    if (process.env.NODE_ENV !== 'test' && dbPath !== ':memory:') {
+      console.log('Connected to SQLite database');
+    }
+  });
+}
+
+// Default database instance
+const db = createDB(process.env.DB_PATH || DB_PATH);
 
 const initDB = () => new Promise((resolve, reject) => {
-  db.serialize(() => {
-    // Create users table with comprehensive profile fields
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      
-      -- Basic Profile Information
-      full_name TEXT,
-      university TEXT,
-      major TEXT,
-      year TEXT,
-      graduation_year TEXT,
-      current_role TEXT DEFAULT 'Student',
-      
-      -- Contact Information
-      linkedin_url TEXT,
-      phone TEXT,
-      
-      -- Gmail Integration
-      gmail_connected BOOLEAN DEFAULT FALSE,
-      gmail_last_sync DATETIME,
-      
-      -- Academic Details
-      gpa TEXT,
-      relevant_coursework TEXT,
-      
-      -- Professional Interests
-      interests TEXT,
-      personal_interests TEXT,
-      
-      -- Skills & Experience
-      technical_skills TEXT,
-      achievements TEXT,
-      
-      -- Personal Pitch & Goals
-      unique_value TEXT,
-      career_goals TEXT,
-      
-      -- Communication Preferences
-      communication_style TEXT,
-      networking_approach TEXT,
-      
-      -- Profile Completion Status
-      profile_completed BOOLEAN DEFAULT FALSE,
-      onboarding_step INTEGER DEFAULT 1,
-      
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`, (err) => {
-      if (err) reject(err);
-    });
-
-    // Create projects table
-    db.run(`CREATE TABLE IF NOT EXISTS projects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      description TEXT,
-      owner_id INTEGER NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (owner_id) REFERENCES users(id)
-    )`, (err) => {
-      if (err) {
-        console.error('Error creating projects table:', err.message);
-        reject(err);
+  const fs = require('fs');
+  const initSqlPath = path.join(__dirname, 'init.sql');
+  
+  fs.readFile(initSqlPath, 'utf8', (err, sql) => {
+    if (err) {
+      console.error('Error reading init.sql:', err);
+      return reject(err);
+    }
+    
+    // Use db.exec for better compatibility with complex SQL
+    db.exec(sql, (execErr) => {
+      if (execErr) {
+        console.error('Error executing init.sql:', execErr);
+        return reject(execErr);
       }
-    });
-
-    // Create tasks table
-    db.run(`CREATE TABLE IF NOT EXISTS tasks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT,
-      status TEXT DEFAULT 'pending',
-      priority TEXT DEFAULT 'medium',
-      project_id INTEGER NOT NULL,
-      assignee_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (project_id) REFERENCES projects(id),
-      FOREIGN KEY (assignee_id) REFERENCES users(id)
-    )`, (err) => {
-      if (err) {
-        console.error('Error creating tasks table:', err.message);
-        reject(err);
-      }
-    });
-
-    // Create oauth_tokens table
-    db.run(`CREATE TABLE IF NOT EXISTS oauth_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      access_token TEXT NOT NULL,
-      refresh_token TEXT,
-      token_expiry DATETIME,
-      scope TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`, (err) => {
-      if (err) {
-        console.error('Error creating oauth_tokens table:', err.message);
-        reject(err);
-      }
-    });
-
-    // Create connections table
-    db.run(`CREATE TABLE IF NOT EXISTS connections (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      email TEXT NOT NULL,
-      full_name TEXT NOT NULL,
-      company TEXT,
-      connection_type TEXT,
-      job_title TEXT,
-      industry TEXT,
-      notes TEXT,
-      status TEXT DEFAULT 'Not Contacted',
-      email_status TEXT DEFAULT 'Not Contacted',
-      last_email_draft TEXT,
-      last_email_sent_date DATETIME,
-      custom_connection_description TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )`, (err) => {
-      if (err) {
-        console.error('Error creating connections table:', err.message);
-        reject(err);
-      } else {
-        // Add indexes for performance optimization
-        addConnectionIndexes()
-          .then(() => {
-            // Add migration logic for existing tables
-            addEmailTrackingColumns()
-              .then(() => {
-                console.log('Database initialized');
-                resolve();
-              })
-              .catch(migrationErr => {
-                console.error('Migration error:', migrationErr.message);
-                reject(migrationErr);
-              });
-          })
-          .catch(indexErr => {
-            console.error('Index creation error:', indexErr.message);
-            reject(indexErr);
-          });
-      }
+      
+      // Run migrations: timeline columns first, then legacy email tracking
+      addTimelineColumns()
+        .then(() => addEmailTrackingColumns())
+        .then(() => {
+          if (process.env.NODE_ENV !== 'test') {
+            console.log('Database initialized successfully');
+          }
+          resolve();
+        })
+        .catch(reject);
     });
   });
 });
@@ -200,40 +85,110 @@ const addConnectionIndexes = () => new Promise((resolve, reject) => {
 
 // Migration function to add email tracking columns to existing tables
 const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
-  const alterQueries = [
-    'ALTER TABLE connections ADD COLUMN email_status TEXT DEFAULT "Not Contacted"',
-    'ALTER TABLE connections ADD COLUMN last_email_draft TEXT',
-    'ALTER TABLE connections ADD COLUMN last_email_sent_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
-    'ALTER TABLE connections ADD COLUMN initial_purpose TEXT',
-    'ALTER TABLE connections ADD COLUMN status_started_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN draft_status TEXT'
-  ];
-
-  let completed = 0;
-  let hasError = false;
-
-  alterQueries.forEach((query, index) => {
-    db.run(query, (err) => {
-      if (err && !err.message.includes('duplicate column name')) {
-        if (!hasError) {
-          hasError = true;
-          console.error(`Migration error on query ${index + 1}:`, err.message);
-          reject(err);
-        }
-      } else {
-        completed++;
-        if (completed === alterQueries.length) {
-          // After adding columns, create the drafts table
-          createDraftsTable()
-            .then(() => {
-              console.log('Email tracking columns migration completed');
-              resolve();
-            })
-            .catch(reject);
-        }
+  // Check if we're working with a fresh timeline-enabled schema
+  // If current_stage_id column exists, skip legacy migrations
+  db.get("PRAGMA table_info(connections)", (err, result) => {
+    if (err) {
+      return reject(err);
+    }
+    
+    // Check if we have current_stage_id column (indicates timeline schema)
+    db.all("PRAGMA table_info(connections)", (pragmaErr, columns) => {
+      if (pragmaErr) {
+        return reject(pragmaErr);
       }
+      
+      const hasTimelineColumns = columns.some(col => col.name === 'current_stage_id');
+      
+      if (hasTimelineColumns) {
+        // Skip legacy migrations for timeline-enabled schema
+        createDraftsTable()
+          .then(() => {
+            console.log('Timeline schema detected, skipping legacy column migrations');
+            resolve();
+          })
+          .catch(reject);
+        return;
+      }
+      
+      // Proceed with legacy migrations for older schemas
+      const alterQueries = [
+        'ALTER TABLE connections ADD COLUMN email_status TEXT DEFAULT "Not Contacted"',
+        'ALTER TABLE connections ADD COLUMN last_email_draft TEXT',
+        'ALTER TABLE connections ADD COLUMN last_email_sent_date DATETIME',
+        'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
+        'ALTER TABLE connections ADD COLUMN initial_purpose TEXT',
+        'ALTER TABLE connections ADD COLUMN status_started_date DATETIME',
+        'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME',
+        'ALTER TABLE connections ADD COLUMN draft_status TEXT'
+      ];
+
+      let completed = 0;
+      let hasError = false;
+
+      alterQueries.forEach((query, index) => {
+        db.run(query, (err) => {
+          if (err && !err.message.includes('duplicate column name')) {
+            if (!hasError) {
+              hasError = true;
+              console.error(`Migration error on query ${index + 1}:`, err.message);
+              reject(err);
+            }
+          } else {
+            completed++;
+            if (completed === alterQueries.length) {
+              // After adding columns, create the drafts table
+              createDraftsTable()
+                .then(() => {
+                  console.log('Email tracking columns migration completed');
+                  resolve();
+                })
+                .catch(reject);
+            }
+          }
+        });
+      });
+    });
+  });
+});
+
+// Migration function to add timeline columns to existing connections table
+const addTimelineColumns = () => new Promise((resolve, reject) => {
+  db.all("PRAGMA table_info(connections)", (err, columns) => {
+    if (err) return reject(err);
+    
+    const hasCurrentStageId = columns.some(col => col.name === 'current_stage_id');
+    const hasTimelineData = columns.some(col => col.name === 'timeline_data');
+    
+    const migrations = [];
+    
+    if (!hasCurrentStageId) {
+      migrations.push("ALTER TABLE connections ADD COLUMN current_stage_id INTEGER");
+    }
+    
+    if (!hasTimelineData) {
+      migrations.push("ALTER TABLE connections ADD COLUMN timeline_data TEXT");
+    }
+    
+    if (migrations.length === 0) {
+      return resolve(); // Already migrated
+    }
+    
+    let completed = 0;
+    migrations.forEach(migration => {
+      db.run(migration, (migrationErr) => {
+        if (migrationErr && !migrationErr.message.includes('duplicate column name')) {
+          return reject(migrationErr);
+        }
+        
+        completed++;
+        if (completed === migrations.length) {
+          if (process.env.NODE_ENV !== 'test') {
+            console.log('Timeline columns migration completed');
+          }
+          resolve();
+        }
+      });
     });
   });
 });
@@ -515,8 +470,6 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     job_title,
     industry,
     notes,
-    status = 'Not Contacted',
-    email_status = 'Not Contacted',
     custom_connection_description = ''
   } = connectionData;
 
@@ -525,10 +478,10 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
   db.run(
     `INSERT INTO connections (
       user_id, email, full_name, company, connection_type, 
-      job_title, industry, notes, status, email_status, custom_connection_description,
-      created_at, updated_at
+      job_title, industry, notes, custom_connection_description,
+      current_stage_id, timeline_data, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, timestamp, timestamp],
+    [userId, email, full_name, company, connection_type, job_title, industry, notes, custom_connection_description, null, null, timestamp, timestamp],
     function insertCallback(err) {
       if (err) {
         console.error('Error creating connection:', err);
@@ -544,8 +497,6 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
           job_title,
           industry,
           notes,
-          status,
-          email_status,
           custom_connection_description,
           created_at: timestamp,
           updated_at: timestamp,
@@ -900,8 +851,311 @@ const updateDraft = (draftId, subject, body) => new Promise((resolve, reject) =>
   });
 });
 
+// Timeline helper functions for Connection Progression System
+
+// Create a new timeline stage with proper cache updates
+const createStage = (connectionId, stageData) => new Promise((resolve, reject) => {
+  const {
+    stage_type,
+    stage_order,
+    stage_status = 'waiting',
+    email_content,
+    draft_content,
+    sent_at,
+    response_received_at,
+    response_deadline
+  } = stageData;
+
+  if (!connectionId || !stage_type || !stage_order) {
+    return reject(new Error('Connection ID, stage type, and stage order are required'));
+  }
+
+  const timestamp = Date.now();
+  
+  // Start a transaction to create stage and update connection
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+    
+    // Insert new stage
+    db.run(`
+      INSERT INTO connection_timeline_stages (
+        connection_id, stage_type, stage_order, stage_status, 
+        email_content, draft_content, sent_at, response_received_at, response_deadline,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      connectionId, stage_type, stage_order, stage_status,
+      email_content, draft_content, sent_at, response_received_at, response_deadline,
+      timestamp, timestamp
+    ], function(err) {
+      if (err) {
+        db.run('ROLLBACK');
+        return reject(err);
+      }
+      
+      const newStageId = this.lastID;
+      
+      // Update connections.current_stage_id to the new stage
+      db.run('UPDATE connections SET current_stage_id = ?, updated_at = ? WHERE id = ?', 
+        [newStageId, timestamp, connectionId], (updateErr) => {
+          if (updateErr) {
+            db.run('ROLLBACK');
+            return reject(updateErr);
+          }
+          
+          // Update timeline cache
+          getTimelineStages(connectionId)
+            .then(timeline => {
+              const timelineData = JSON.stringify({
+                currentStage: timeline.stages.length > 0 ? Math.max(...timeline.stages.map(s => s.stage_order)) : 1,
+                stages: timeline.stages.map(stage => ({
+                  id: stage.id,
+                  type: stage.stage_type,
+                  order: stage.stage_order,
+                  status: stage.stage_status
+                }))
+              });
+              
+              db.run(`
+                UPDATE connections 
+                SET timeline_data = ?, updated_at = ? 
+                WHERE id = ?
+              `, [timelineData, timestamp, connectionId], (cacheErr) => {
+                if (cacheErr) {
+                  db.run('ROLLBACK');
+                  return reject(cacheErr);
+                }
+                
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) {
+                    return reject(commitErr);
+                  }
+                  
+                  resolve({
+                    id: newStageId,
+                    connectionId,
+                    stage_type,
+                    stage_order,
+                    stage_status,
+                    created_at: timestamp,
+                    updated_at: timestamp,
+                    timeline: timeline
+                  });
+                });
+              });
+            })
+            .catch(err => {
+              db.run('ROLLBACK');
+              reject(err);
+            });
+        });
+    });
+  });
+});
+
+// Create initial timeline for a new connection
+const createInitialTimeline = (connectionId) => new Promise((resolve, reject) => {
+  if (!connectionId) {
+    return reject(new Error('Connection ID is required'));
+  }
+
+  const timestamp = Date.now();
+  
+  // Start a transaction to create the initial timeline and settings
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+    
+    // Create the first stage: 'first_impression' with 'waiting' status (red circle)
+    db.run(`
+      INSERT INTO connection_timeline_stages (
+        connection_id, stage_type, stage_order, stage_status, 
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `, [connectionId, 'first_impression', 1, 'waiting', timestamp, timestamp], function(err) {
+      if (err) {
+        db.run('ROLLBACK');
+        return reject(err);
+      }
+      
+      const stageId = this.lastID;
+      
+      // Create default connection settings
+      db.run(`
+        INSERT INTO connection_settings (
+          connection_id, follow_up_wait_days, created_at, updated_at
+        ) VALUES (?, ?, ?, ?)
+      `, [connectionId, 7, timestamp, timestamp], (settingsErr) => {
+        if (settingsErr) {
+          db.run('ROLLBACK');
+          return reject(settingsErr);
+        }
+        
+        // Update connection with current stage and timeline cache
+        const timelineData = JSON.stringify({
+          currentStage: 1,
+          stages: [{
+            id: stageId,
+            type: 'first_impression',
+            order: 1,
+            status: 'waiting'
+          }]
+        });
+        
+        db.run(`
+          UPDATE connections 
+          SET current_stage_id = ?, timeline_data = ?, updated_at = ? 
+          WHERE id = ?
+        `, [stageId, timelineData, timestamp, connectionId], (updateErr) => {
+          if (updateErr) {
+            db.run('ROLLBACK');
+            return reject(updateErr);
+          }
+          
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) {
+              return reject(commitErr);
+            }
+            
+            resolve({
+              connectionId,
+              stageId,
+              stage: {
+                id: stageId,
+                type: 'first_impression',
+                order: 1,
+                status: 'waiting'
+              },
+              timelineInitialized: true
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
+// Get timeline stages for a connection
+const getTimelineStages = (connectionId) => new Promise((resolve, reject) => {
+  if (!connectionId) {
+    return reject(new Error('Connection ID is required'));
+  }
+
+  const query = `
+    SELECT * FROM connection_timeline_stages 
+    WHERE connection_id = ? 
+    ORDER BY stage_order ASC
+  `;
+  
+  db.all(query, [connectionId], (err, stages) => {
+    if (err) {
+      console.error('Error fetching timeline stages:', err);
+      return reject(err);
+    }
+    
+    // Also get connection settings
+    db.get(`
+      SELECT * FROM connection_settings 
+      WHERE connection_id = ?
+    `, [connectionId], (settingsErr, settings) => {
+      if (settingsErr) {
+        console.error('Error fetching connection settings:', settingsErr);
+        return reject(settingsErr);
+      }
+      
+      resolve({
+        connectionId,
+        stages: stages || [],
+        settings: settings || { follow_up_wait_days: 7 },
+        stageCount: stages ? stages.length : 0
+      });
+    });
+  });
+});
+
+// Update stage status and content
+const updateStage = (connectionId, stageId, data) => new Promise((resolve, reject) => {
+  if (!connectionId || !stageId || !data) {
+    return reject(new Error('Connection ID, stage ID, and data are required'));
+  }
+
+  const allowedFields = [
+    'stage_status', 'email_content', 'draft_content', 
+    'sent_at', 'response_received_at', 'response_deadline'
+  ];
+  
+  const updateFields = [];
+  const values = [];
+  
+  Object.keys(data).forEach(key => {
+    if (allowedFields.includes(key)) {
+      updateFields.push(`${key} = ?`);
+      values.push(data[key]);
+    }
+  });
+  
+  if (updateFields.length === 0) {
+    return reject(new Error('No valid fields to update'));
+  }
+  
+  // Add updated_at timestamp
+  updateFields.push('updated_at = ?');
+  values.push(Date.now());
+  values.push(stageId);
+  values.push(connectionId);
+  
+  const query = `
+    UPDATE connection_timeline_stages 
+    SET ${updateFields.join(', ')} 
+    WHERE id = ? AND connection_id = ?
+  `;
+  
+  db.run(query, values, function(err) {
+    if (err) {
+      console.error('Error updating stage:', err);
+      return reject(err);
+    }
+    
+    if (this.changes === 0) {
+      return reject(new Error('Stage not found or access denied'));
+    }
+    
+    // Update timeline cache in connections table
+    getTimelineStages(connectionId)
+      .then(timeline => {
+        const timelineData = JSON.stringify({
+          currentStage: timeline.stages.length > 0 ? Math.max(...timeline.stages.map(s => s.stage_order)) : 1,
+          stages: timeline.stages.map(stage => ({
+            id: stage.id,
+            type: stage.stage_type,
+            order: stage.stage_order,
+            status: stage.stage_status
+          }))
+        });
+        
+        db.run(`
+          UPDATE connections 
+          SET timeline_data = ?, updated_at = ? 
+          WHERE id = ?
+        `, [timelineData, Date.now(), connectionId], (updateErr) => {
+          if (updateErr) {
+            console.error('Error updating timeline cache:', updateErr);
+          }
+          
+          resolve({
+            stageId,
+            connectionId,
+            updated: true,
+            timeline: timeline
+          });
+        });
+      })
+      .catch(reject);
+  });
+});
+
 module.exports = {
   db,
+  createDB,
   initDB,
   createUser,
   createUserWithEmail,
@@ -925,4 +1179,9 @@ module.exports = {
   getConnectionDrafts,
   deleteDraft,
   updateDraft,
+  // Timeline functions
+  createStage,
+  createInitialTimeline,
+  getTimelineStages,
+  updateStage,
 };

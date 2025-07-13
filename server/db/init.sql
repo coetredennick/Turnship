@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- Connections table (already exists but including for completeness)
+-- Connections table (updated for timeline system)
 CREATE TABLE IF NOT EXISTS connections (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -101,12 +101,41 @@ CREATE TABLE IF NOT EXISTS connections (
   job_title TEXT,
   industry TEXT,
   notes TEXT,
-  status TEXT DEFAULT 'Not Contacted',
-  email_status TEXT DEFAULT 'Not Contacted',
-  last_email_draft TEXT,
-  last_email_sent_date DATETIME,
   custom_connection_description TEXT,
+  current_stage_id INTEGER,
+  timeline_data TEXT, -- JSON cache for performance
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+-- Connection Timeline Stages table
+CREATE TABLE IF NOT EXISTS connection_timeline_stages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  connection_id INTEGER NOT NULL,
+  stage_type TEXT NOT NULL, -- 'first_impression', 'response', 'follow_up'
+  stage_order INTEGER NOT NULL, -- 1, 2, 3, 4...
+  stage_status TEXT NOT NULL, -- 'draft', 'sent', 'received', 'waiting'
+  email_content TEXT, -- Actual sent email content
+  draft_content TEXT, -- Draft content if exists
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  sent_at DATETIME, -- When email was sent
+  response_received_at DATETIME, -- When response was detected
+  response_deadline DATETIME, -- When follow-up should be created
+  FOREIGN KEY (connection_id) REFERENCES connections(id)
+);
+
+-- Connection Settings table
+CREATE TABLE IF NOT EXISTS connection_settings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  connection_id INTEGER NOT NULL,
+  follow_up_wait_days INTEGER DEFAULT 7, -- Customizable per connection
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (connection_id) REFERENCES connections(id)
+);
+
+-- Indexes for timeline system performance
+CREATE INDEX IF NOT EXISTS idx_timeline_connection_order ON connection_timeline_stages(connection_id, stage_order);
+CREATE INDEX IF NOT EXISTS idx_timeline_deadlines ON connection_timeline_stages(response_deadline);

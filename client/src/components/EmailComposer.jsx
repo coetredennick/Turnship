@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { InlineLoading } from './Loading';
-import { emailsAPI, connectionsAPI, handleAPIError } from '../services/api';
+import { emailsAPI, connectionsAPI, timelineAPI, handleAPIError } from '../services/api';
 
 // Draft Bank Modal - Shows all saved drafts
 const DraftBankModal = ({ isOpen, onClose, connections, targetConnection, onDraftSelected, onDraftDeleted }) => {
@@ -277,7 +277,9 @@ const EmailComposer = ({
   initialEmail = null,
   onEmailSent,
   onDraftSaved,
-  loadExistingDraft = true // New parameter: false for manual emails, true for draft editing
+  loadExistingDraft = true, // New parameter: false for manual emails, true for draft editing
+  currentStageId = null, // Stage ID when opened from timeline stage click
+  onTimelineUpdated = null // Callback to update parent timeline cache
 }) => {
   const [email, setEmail] = useState({
     subject: '',
@@ -394,6 +396,25 @@ const EmailComposer = ({
         setCurrentDraftId(result.data.draft.id);
       }
       
+      // Update timeline to draft status
+      try {
+        const stageId = currentStageId || connection.current_stage_id;
+        if (stageId) {
+          const timelineResponse = await timelineAPI.updateStage(connection.id, stageId, {
+            stage_status: 'draft',
+            draft_content: email.body
+          });
+          
+          // Update parent timeline cache
+          if (onTimelineUpdated && timelineResponse.data) {
+            onTimelineUpdated(timelineResponse.data);
+          }
+        }
+      } catch (timelineError) {
+        console.warn('Failed to update timeline for draft:', timelineError);
+        // Don't fail the draft save if timeline update fails
+      }
+      
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       
@@ -430,6 +451,30 @@ const EmailComposer = ({
       
       // Then actually send the email with subject and body
       const response = await emailsAPI.sendEmail(connection.id, 'First Impression', email.subject, email.body);
+      
+      // Update timeline to sent status
+      try {
+        const stageId = currentStageId || connection.current_stage_id;
+        if (stageId) {
+          // Update current stage to sent
+          const updateResponse = await timelineAPI.updateStage(connection.id, stageId, {
+            stage_status: 'sent',
+            email_content: email.body,
+            sent_at: Date.now()
+          });
+          
+          // Advance timeline to create next stage
+          const advanceResponse = await timelineAPI.advanceTimeline(connection.id, 'send_email', stageId);
+          
+          // Update parent timeline cache with the most recent response
+          if (onTimelineUpdated && advanceResponse.data) {
+            onTimelineUpdated(advanceResponse.data);
+          }
+        }
+      } catch (timelineError) {
+        console.warn('Failed to update timeline for sent email:', timelineError);
+        // Don't fail the email send if timeline update fails
+      }
       
       // Check if email was actually sent
       if (response.data.emailSent) {

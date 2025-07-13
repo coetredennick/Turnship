@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Dashboard from './Dashboard';
 import { useAuth } from '../context/AuthContext';
+import { connectionsAPI, timelineAPI, handleAPIError } from '../services/api';
 
 // Mock the AuthContext
 jest.mock('../context/AuthContext', () => ({
@@ -16,6 +17,21 @@ jest.mock('../components/Loading', () => ({
       Loading...
     </div>
   )
+}));
+
+// Mock API services for Phase 1 timeline integration
+jest.mock('../services/api', () => ({
+  connectionsAPI: {
+    getConnections: jest.fn()
+  },
+  authAPI: {
+    checkAuth: jest.fn(),
+    testGmail: jest.fn()
+  },
+  timelineAPI: {
+    getTimeline: jest.fn()
+  },
+  handleAPIError: jest.fn()
 }));
 
 describe('Dashboard', () => {
@@ -35,6 +51,7 @@ describe('Dashboard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useAuth.mockReturnValue(defaultAuthContext);
+    
     // Set up default successful Gmail test
     defaultAuthContext.testGmailConnection.mockResolvedValue({
       success: true,
@@ -44,6 +61,25 @@ describe('Dashboard', () => {
         }
       }
     });
+
+    // Mock API responses for Phase 1 timeline integration
+    connectionsAPI.getConnections.mockResolvedValue({
+      data: {
+        connections: []
+      }
+    });
+
+    // Mock empty timeline data to prevent API calls during tests
+    timelineAPI.getTimeline.mockResolvedValue({
+      data: {
+        timeline: {
+          stages: []
+        }
+      }
+    });
+
+    // Mock error handler to return a simple message
+    handleAPIError.mockReturnValue('Mock error message');
   });
 
   describe('Initial Render', () => {
@@ -71,37 +107,61 @@ describe('Dashboard', () => {
       expect(screen.getByText('T')).toBeInTheDocument(); // Logo
     });
 
-    it('should render all networking overview stats', () => {
+    it('should render all networking overview stats', async () => {
       render(<Dashboard />);
       
-      expect(screen.getByText('Recent Connections')).toBeInTheDocument();
-      expect(screen.getByText('Emails Sent This Week')).toBeInTheDocument();
-      expect(screen.getByText('Follow-ups Due')).toBeInTheDocument();
+      // Wait for loadConnections to be called and complete
+      await waitFor(() => {
+        expect(connectionsAPI.getConnections).toHaveBeenCalled();
+      });
       
-      // All should start at 0
-      const statValues = screen.getAllByText('0');
-      expect(statValues).toHaveLength(3);
+      // Now assert the DOM elements that depend on connections state
+      await waitFor(() => {
+        expect(screen.getByText('Recent Connections')).toBeInTheDocument();
+        expect(screen.getByText('Emails Sent This Week')).toBeInTheDocument();
+        expect(screen.getByText('Follow-ups Due')).toBeInTheDocument();
+        
+        // All should start at 0
+        const statValues = screen.getAllByText('0');
+        expect(statValues).toHaveLength(3);
+      });
     });
 
-    it('should render quick action cards as disabled', () => {
+    it('should render quick action cards as disabled', async () => {
       render(<Dashboard />);
       
-      expect(screen.getByText('Generate Email')).toBeInTheDocument();
-      expect(screen.getByText('Add Connection')).toBeInTheDocument();
-      expect(screen.getByText('View Analytics')).toBeInTheDocument();
+      // Wait for loadConnections to be called and complete
+      await waitFor(() => {
+        expect(connectionsAPI.getConnections).toHaveBeenCalled();
+      });
       
-      // All should show "Coming Soon"
-      const comingSoonTexts = screen.getAllByText('Coming Soon');
-      expect(comingSoonTexts).toHaveLength(3);
+      // Now assert the DOM elements that depend on connections state
+      await waitFor(() => {
+        expect(screen.getByText('Generate Email')).toBeInTheDocument();
+        expect(screen.getByText('Add Connection')).toBeInTheDocument();
+        expect(screen.getByText('View Analytics')).toBeInTheDocument();
+        
+        // All should show "Coming Soon"
+        const comingSoonTexts = screen.getAllByText('Coming Soon');
+        expect(comingSoonTexts).toHaveLength(3);
+      });
     });
 
-    it('should render getting started guide', () => {
+    it('should render getting started guide', async () => {
       render(<Dashboard />);
       
-      expect(screen.getByText('🚀 Getting Started with Turnship')).toBeInTheDocument();
-      expect(screen.getByText('Test your Gmail connection')).toBeInTheDocument();
-      expect(screen.getByText('Add your first connection (Coming Soon)')).toBeInTheDocument();
-      expect(screen.getByText('Generate your first email (Coming Soon)')).toBeInTheDocument();
+      // Wait for loadConnections to be called and complete
+      await waitFor(() => {
+        expect(connectionsAPI.getConnections).toHaveBeenCalled();
+      });
+      
+      // Now assert the DOM elements that depend on connections state
+      await waitFor(() => {
+        expect(screen.getByText('🚀 Getting Started with Turnship')).toBeInTheDocument();
+        expect(screen.getByText('Test your Gmail connection')).toBeInTheDocument();
+        expect(screen.getByText('Add your first connection (Coming Soon)')).toBeInTheDocument();
+        expect(screen.getByText('Generate your first email (Coming Soon)')).toBeInTheDocument();
+      });
     });
   });
 

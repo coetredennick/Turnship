@@ -8,12 +8,18 @@ const routes = require('./routes');
 const authRoutes = require('./routes/auth');
 const { initializeOAuth } = require('./services/oauth');
 const { initDB } = require('./db/connection');
+const { scheduleJobs, stopJobs } = require('./services/timeline');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Initialize database
-initDB().catch(console.error);
+// Initialize database and timeline jobs
+initDB()
+  .then(() => {
+    // Start timeline background jobs after database is ready
+    scheduleJobs();
+  })
+  .catch(console.error);
 
 // Initialize OAuth
 initializeOAuth();
@@ -55,6 +61,19 @@ app.use('/api', routes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  stopJobs();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  stopJobs();
+  process.exit(0);
 });
 
 // Only start server if not in test environment

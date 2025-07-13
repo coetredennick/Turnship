@@ -1,28 +1,43 @@
 const fs = require('fs');
 const path = require('path');
+
+// Set test environment before requiring connection module
+process.env.NODE_ENV = 'test';
+process.env.DB_PATH = ':memory:';
+
 const {
-  db,
-  initDB,
   createUser,
   updateUserTokens,
   getUserTokens,
 } = require('../db/connection');
 
 describe('OAuth Tokens DB integration', () => {
-  const dbPath = path.join(__dirname, '..', 'dev.db');
+  // Helper to initialize test database schema
+  const initTestDB = () => {
+    return new Promise((resolve, reject) => {
+      const initSqlPath = path.join(__dirname, '../db/init.sql');
+      
+      fs.readFile(initSqlPath, 'utf8', (err, sql) => {
+        if (err) return reject(err);
+        
+        // Get the db instance from the connection module
+        const { db } = require('../db/connection');
+        
+        db.exec(sql, (execErr) => {
+          if (execErr) return reject(execErr);
+          resolve();
+        });
+      });
+    });
+  };
 
   beforeAll(async () => {
-    // Remove existing test database to ensure a clean slate
-    if (fs.existsSync(dbPath)) {
-      await new Promise((resolve) => {
-        db.close(() => resolve());
-      });
-      fs.unlinkSync(dbPath);
-    }
-    await initDB();
+    // Initialize the test database with schema
+    await initTestDB();
   });
 
   afterEach(async () => {
+    const { db } = require('../db/connection');
     await new Promise((resolve, reject) => {
       db.run('DELETE FROM oauth_tokens', (err) => {
         if (err) return reject(err);
@@ -37,16 +52,15 @@ describe('OAuth Tokens DB integration', () => {
     });
   });
 
-  afterAll(async () => {
-    await new Promise((resolve) => {
-      db.close(() => resolve());
-    });
-    if (fs.existsSync(dbPath)) {
-      fs.unlinkSync(dbPath);
-    }
+  afterAll(() => {
+    // Clean up environment
+    delete process.env.NODE_ENV;
+    delete process.env.DB_PATH;
   });
 
+
   test('getUserTokens returns camelCase fields', async () => {
+    const { db } = require('../db/connection');
     const user = await createUser({ displayName: 'Amy', emails: [{ value: 'amy@example.com' }] });
     await new Promise((resolve, reject) => {
       db.run(
@@ -71,6 +85,7 @@ describe('OAuth Tokens DB integration', () => {
   });
 
   test('updateUserTokens updates token_expiry', async () => {
+    const { db } = require('../db/connection');
     const user = await createUser({ displayName: 'Bob', emails: [{ value: 'bob@example.com' }] });
     await new Promise((resolve, reject) => {
       db.run(

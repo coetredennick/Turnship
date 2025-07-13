@@ -176,6 +176,34 @@ export const emailsAPI = {
   deleteDraft: (draftId) => api.delete(`/api/emails/drafts/${draftId}`)
 };
 
+// Timeline API functions
+export const timelineAPI = {
+  // Get complete timeline for connection
+  getTimeline: (id) => api.get(`/api/connections/${id}/timeline`),
+  
+  // Create new timeline stage
+  createStage: (id, data) => api.post(`/api/connections/${id}/timeline/stage`, data),
+  
+  // Update timeline stage
+  updateStage: (id, stageId, data) => api.put(`/api/connections/${id}/timeline/stage/${stageId}`, data),
+  
+  // Delete timeline stage (returns 501 - not implemented)
+  deleteStage: (id, stageId) => api.delete(`/api/connections/${id}/timeline/stage/${stageId}`),
+  
+  // Auto-advance timeline logic
+  advanceTimeline: (id, action, stageId, content) => api.post(`/api/connections/${id}/timeline/advance`, {
+    action,
+    stage_id: stageId,
+    content
+  }),
+  
+  // Get timeline settings
+  getTimelineSettings: (id) => api.get(`/api/connections/${id}/timeline/settings`),
+  
+  // Update timeline settings
+  updateTimelineSettings: (id, data) => api.put(`/api/connections/${id}/timeline/settings`, data)
+};
+
 // General API functions for future use
 export const generalAPI = {
   // Health check

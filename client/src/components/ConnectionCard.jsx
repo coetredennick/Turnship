@@ -1,5 +1,6 @@
 import React from 'react';
 import StatusBadge from './StatusBadge';
+import TimelineVisual from './TimelineVisual';
 import ProgressDonut from './ProgressDonut';
 
 const ConnectionCard = ({
@@ -11,7 +12,8 @@ const ConnectionCard = ({
   onEdit,
   onViewDrafts,
   onRemove,
-  onStatusChange
+  onStatusChange,
+  onStageClick
 }) => {
   return (
     <div className={`px-4 py-1 border-b hover:bg-gray-50 transition-colors relative h-17 ${
@@ -55,13 +57,24 @@ const ConnectionCard = ({
               <ProgressDonut connection={connection} size={20} />
             </div>
             
-            {/* Status Badge */}
+            {/* Status Badge - Phase 1: Keep alongside TimelineVisual */}
             <StatusBadge 
               status={connection.email_status || 'Not Contacted'} 
               editable={true}
               onStatusChange={onStatusChange}
               connectionId={connection.id}
             />
+            
+            {/* Timeline Visual - Phase 1: Add alongside StatusBadge */}
+            {connection.timeline && onStageClick && (
+              <div className="ml-2">
+                <TimelineVisual 
+                  connection={connection}
+                  onStageClick={(stage) => onStageClick(stage, connection)}
+                  compact={true}
+                />
+              </div>
+            )}
             
             {/* Vertically Stacked Action Buttons - Compressed */}
             <div className="flex flex-col space-y-0">
