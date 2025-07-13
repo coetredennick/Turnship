@@ -47,10 +47,10 @@ router.get('/google/callback', (req, res, next) => passport.authenticate('google
     
     // Check if user needs to complete profile
     if (!user.profile_completed) {
-      return res.redirect(`${CLIENT_URL}/onboarding`);
+      return res.redirect(`${CLIENT_URL}/onboarding?oauth_success=true`);
     }
     
-    return res.redirect(`${CLIENT_URL}/dashboard`);
+    return res.redirect(`${CLIENT_URL}/dashboard?oauth_success=true`);
   });
 })(req, res, next));
 
@@ -199,6 +199,25 @@ router.post('/logout', (req, res) => req.logout((logoutErr) => {
     authenticated: false,
   });
 }));
+
+// Check Gmail connection status
+router.get('/gmail/status', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const tokens = await getUserTokens(userId);
+    
+    res.json({
+      success: true,
+      connected: !!tokens && !!tokens.accessToken
+    });
+  } catch (error) {
+    console.error('Gmail status check error:', error);
+    res.json({
+      success: false,
+      connected: false
+    });
+  }
+});
 
 // DEVELOPMENT: Test Gmail connection with hardcoded tokens
 router.get('/gmail/test', async (req, res) => {

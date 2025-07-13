@@ -225,11 +225,50 @@ const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
       } else {
         completed++;
         if (completed === alterQueries.length) {
-          console.log('Email tracking columns migration completed');
-          resolve();
+          // After adding columns, create the drafts table
+          createDraftsTable()
+            .then(() => {
+              console.log('Email tracking columns migration completed');
+              resolve();
+            })
+            .catch(reject);
         }
       }
     });
+  });
+});
+
+// Create drafts table for storing multiple drafts per connection
+const createDraftsTable = () => new Promise((resolve, reject) => {
+  const createTableQuery = `
+    CREATE TABLE IF NOT EXISTS drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      connection_id INTEGER NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+    )
+  `;
+  
+  db.run(createTableQuery, (err) => {
+    if (err) {
+      console.error('Error creating drafts table:', err.message);
+      reject(err);
+    } else {
+      // Create index for better performance
+      db.run('CREATE INDEX IF NOT EXISTS idx_drafts_connection_id ON drafts(connection_id)', (indexErr) => {
+        if (indexErr) {
+          console.error('Error creating drafts index:', indexErr.message);
+          reject(indexErr);
+        } else {
+          console.log('Drafts table created successfully');
+          resolve();
+        }
+      });
+    }
   });
 });
 
@@ -753,6 +792,114 @@ const updateCustomConnectionDescription = (connectionId, description) => new Pro
   });
 });
 
+// New draft storage functions for multiple drafts
+const saveEmailDraftNew = (connectionId, subject, body, status = null) => new Promise((resolve, reject) => {
+  if (typeof subject !== 'string' || typeof body !== 'string') {
+    return reject(new Error('Subject and body must be strings'));
+  }
+  
+  // Get current connection to determine status if not provided
+  if (!status) {
+    getConnectionById(connectionId)
+      .then(connection => {
+        if (connection) {
+          saveEmailDraftNew(connectionId, subject, body, connection.email_status)
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(new Error('Connection not found'));
+        }
+      })
+      .catch(reject);
+    return;
+  }
+  
+  const timestamp = Date.now();
+  const query = `
+    INSERT INTO drafts (connection_id, subject, body, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `;
+  const values = [connectionId, subject, body, status, timestamp, timestamp];
+  
+  db.run(query, values, function insertCallback(err) {
+    if (err) {
+      console.error('Error saving email draft:', err);
+      reject(err);
+    } else {
+      resolve({
+        id: this.lastID,
+        connectionId,
+        subject,
+        body,
+        status,
+        draftSaved: true,
+        created_at: timestamp
+      });
+    }
+  });
+});
+
+const getConnectionDrafts = (connectionId) => new Promise((resolve, reject) => {
+  const query = 'SELECT * FROM drafts WHERE connection_id = ? ORDER BY created_at DESC';
+  
+  db.all(query, [connectionId], (err, rows) => {
+    if (err) {
+      console.error('Error fetching connection drafts:', err);
+      reject(err);
+    } else {
+      resolve({
+        connectionId,
+        drafts: rows || []
+      });
+    }
+  });
+});
+
+const deleteDraft = (draftId) => new Promise((resolve, reject) => {
+  const query = 'DELETE FROM drafts WHERE id = ?';
+  
+  db.run(query, [draftId], function deleteCallback(err) {
+    if (err) {
+      console.error('Error deleting draft:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Draft not found'));
+    } else {
+      resolve({
+        id: draftId,
+        deleted: true
+      });
+    }
+  });
+});
+
+const updateDraft = (draftId, subject, body) => new Promise((resolve, reject) => {
+  if (typeof subject !== 'string' || typeof body !== 'string') {
+    return reject(new Error('Subject and body must be strings'));
+  }
+  
+  const query = 'UPDATE drafts SET subject = ?, body = ?, updated_at = ? WHERE id = ?';
+  const values = [subject, body, Date.now(), draftId];
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error updating draft:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('Draft not found'));
+    } else {
+      // Return the updated draft
+      db.get('SELECT * FROM drafts WHERE id = ?', [draftId], (selectErr, row) => {
+        if (selectErr) {
+          reject(selectErr);
+        } else {
+          resolve(row);
+        }
+      });
+    }
+  });
+});
+
 module.exports = {
   db,
   initDB,
@@ -773,4 +920,9 @@ module.exports = {
   saveEmailDraft,
   getConnectionDraft,
   updateCustomConnectionDescription,
+  // New draft functions
+  saveEmailDraftNew,
+  getConnectionDrafts,
+  deleteDraft,
+  updateDraft,
 };

@@ -2,9 +2,16 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const {
   getConnectionById,
-  updateConnectionEmailStatus,
+  updateConnection,
   saveEmailDraft,
   getConnectionDraft,
+  updateConnectionEmailStatus,
+  trackComposerOpened,
+  // New draft functions
+  saveEmailDraftNew,
+  getConnectionDrafts,
+  deleteDraft,
+  updateDraft,
 } = require('../db/connection');
 const { generateBatchEmails, DEFAULT_USER_PROFILE } = require('../services/email-ai');
 
@@ -326,17 +333,24 @@ router.put('/draft/:connectionId', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/emails/send/:connectionId - Mark email as sent, update status
+// POST /api/emails/send/:connectionId - Actually send email via Gmail API
 router.post('/send/:connectionId', requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const connectionId = parseInt(req.params.connectionId, 10);
-    const { emailType = 'First Impression' } = req.body;
+    const { emailType = 'First Impression', subject, body } = req.body;
     
     if (isNaN(connectionId)) {
       return res.status(400).json({
         error: 'Invalid connection ID',
         message: 'Connection ID must be a valid number',
+      });
+    }
+    
+    if (!subject || !body) {
+      return res.status(400).json({
+        error: 'Missing email content',
+        message: 'Subject and body are required to send email',
       });
     }
     
@@ -364,7 +378,71 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
       });
     }
     
-    // Update email status - advance to next stage after sending
+    // Try to send email via Gmail API
+    let emailSent = false;
+    let emailError = null;
+    
+    try {
+      // Get user's OAuth tokens from database
+      const { getUserTokens } = require('../db/connection');
+      const userTokens = await getUserTokens(userId);
+      
+      if (!userTokens || !userTokens.accessToken) {
+        throw new Error('User Gmail tokens not found. Please reconnect your Gmail account.');
+      }
+      
+      // Create Gmail service with user's tokens
+      const { google } = require('googleapis');
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        process.env.GOOGLE_REDIRECT_URI
+      );
+      
+      oauth2Client.setCredentials({
+        access_token: userTokens.accessToken,
+        refresh_token: userTokens.refreshToken,
+      });
+      
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      
+      // Format email message
+      const message = [
+        `To: ${connection.email}`,
+        `Subject: ${subject}`,
+        '',
+        body
+      ].join('\n');
+
+      const encodedMessage = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+
+      // Send the email
+      const result = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: {
+          raw: encodedMessage,
+        },
+      });
+      
+      console.log('Email sent successfully:', result.data);
+      emailSent = true;
+    } catch (error) {
+      console.error('Failed to send email via Gmail API:', error);
+      emailError = error.message;
+      
+      // Check if it's a token/auth issue
+      if (error.message.includes('invalid_grant') || error.message.includes('unauthorized')) {
+        return res.status(401).json({
+          error: 'Gmail authentication failed',
+          message: 'Please reconnect your Gmail account. Gmail API tokens may have expired.',
+          authRequired: true
+        });
+      }
+      
+      // For other errors, we'll still update the status but notify about the sending failure
+    }
+    
+    // Update email status - advance to next stage after sending attempt
     const statusProgressionMap = {
       'First Impression': 'Follow-up',
       'Follow-up': 'Response'
@@ -375,7 +453,9 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
     const updatedConnection = await updateConnectionEmailStatus(connectionId, nextStatus, sentDate);
     
     return res.json({
-      message: 'Email status updated successfully',
+      message: emailSent ? 'Email sent successfully' : 'Email status updated (sending failed)',
+      emailSent,
+      emailError,
       connection: {
         id: updatedConnection.id,
         email_status: updatedConnection.email_status,
@@ -383,10 +463,10 @@ router.post('/send/:connectionId', requireAuth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error updating email status:', error);
+    console.error('Error sending email:', error);
     return res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to update email status',
+      message: 'Failed to send email',
     });
   }
 });
@@ -436,6 +516,240 @@ router.get('/draft/:connectionId', requireAuth, async (req, res) => {
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to retrieve draft',
+    });
+  }
+});
+
+// NEW ENDPOINTS FOR MULTIPLE DRAFTS SYSTEM
+
+// POST /api/emails/drafts/:connectionId - Save new draft (multiple drafts support)
+router.post('/drafts/:connectionId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const connectionId = parseInt(req.params.connectionId, 10);
+    const { subject, body } = req.body;
+    
+    if (isNaN(connectionId)) {
+      return res.status(400).json({
+        error: 'Invalid connection ID',
+        message: 'Connection ID must be a valid number',
+      });
+    }
+    
+    if (typeof subject !== 'string' || typeof body !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid draft content',
+        message: 'Subject and body must be strings',
+      });
+    }
+    
+    if (!subject.trim() && !body.trim()) {
+      return res.status(400).json({
+        error: 'Empty draft',
+        message: 'Draft must have either subject or body content',
+      });
+    }
+    
+    // Verify user owns this connection
+    const connection = await getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({
+        error: 'Connection not found',
+        message: 'The specified connection does not exist',
+      });
+    }
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        error: 'Access forbidden',
+        message: 'You do not have permission to save drafts for this connection',
+      });
+    }
+    
+    // Save new draft
+    const result = await saveEmailDraftNew(connectionId, subject, body, connection.email_status);
+    
+    return res.json({
+      message: 'Draft saved successfully',
+      draft: result
+    });
+  } catch (error) {
+    console.error('Error saving new draft:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to save draft',
+    });
+  }
+});
+
+// GET /api/emails/drafts/:connectionId - Get all drafts for connection
+router.get('/drafts/:connectionId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const connectionId = parseInt(req.params.connectionId, 10);
+    
+    if (isNaN(connectionId)) {
+      return res.status(400).json({
+        error: 'Invalid connection ID',
+        message: 'Connection ID must be a valid number',
+      });
+    }
+    
+    // Verify user owns this connection
+    const connection = await getConnectionById(connectionId);
+    if (!connection) {
+      return res.status(404).json({
+        error: 'Connection not found',
+        message: 'The specified connection does not exist',
+      });
+    }
+    
+    if (connection.user_id !== userId) {
+      return res.status(403).json({
+        error: 'Access forbidden',
+        message: 'You do not have permission to access drafts for this connection',
+      });
+    }
+    
+    // Get all drafts for this connection
+    const result = await getConnectionDrafts(connectionId);
+    
+    return res.json({
+      message: 'Drafts retrieved successfully',
+      drafts: result.drafts,
+      count: result.drafts.length
+    });
+  } catch (error) {
+    console.error('Error retrieving drafts:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to retrieve drafts',
+    });
+  }
+});
+
+// PUT /api/emails/drafts/:draftId - Update existing draft
+router.put('/drafts/:draftId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const draftId = parseInt(req.params.draftId, 10);
+    const { subject, body } = req.body;
+    
+    if (isNaN(draftId)) {
+      return res.status(400).json({
+        error: 'Invalid draft ID',
+        message: 'Draft ID must be a valid number',
+      });
+    }
+    
+    if (typeof subject !== 'string' || typeof body !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid draft content',
+        message: 'Subject and body must be strings',
+      });
+    }
+    
+    // First, verify the draft exists and user owns the connection
+    const draftQuery = `
+      SELECT d.*, c.user_id 
+      FROM drafts d 
+      JOIN connections c ON d.connection_id = c.id 
+      WHERE d.id = ?
+    `;
+    
+    const { db } = require('../db/connection');
+    const draft = await new Promise((resolve, reject) => {
+      db.get(draftQuery, [draftId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
+    if (!draft) {
+      return res.status(404).json({
+        error: 'Draft not found',
+        message: 'The specified draft does not exist',
+      });
+    }
+    
+    if (draft.user_id !== userId) {
+      return res.status(403).json({
+        error: 'Access forbidden',
+        message: 'You do not have permission to update this draft',
+      });
+    }
+    
+    // Update the draft
+    const result = await updateDraft(draftId, subject, body);
+    
+    return res.json({
+      message: 'Draft updated successfully',
+      draft: result
+    });
+  } catch (error) {
+    console.error('Error updating draft:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to update draft',
+    });
+  }
+});
+
+// DELETE /api/emails/drafts/:draftId - Delete specific draft
+router.delete('/drafts/:draftId', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const draftId = parseInt(req.params.draftId, 10);
+    
+    if (isNaN(draftId)) {
+      return res.status(400).json({
+        error: 'Invalid draft ID',
+        message: 'Draft ID must be a valid number',
+      });
+    }
+    
+    // First, verify the draft exists and user owns the connection
+    const draftQuery = `
+      SELECT d.*, c.user_id 
+      FROM drafts d 
+      JOIN connections c ON d.connection_id = c.id 
+      WHERE d.id = ?
+    `;
+    
+    const { db } = require('../db/connection');
+    const draft = await new Promise((resolve, reject) => {
+      db.get(draftQuery, [draftId], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+    
+    if (!draft) {
+      return res.status(404).json({
+        error: 'Draft not found',
+        message: 'The specified draft does not exist',
+      });
+    }
+    
+    if (draft.user_id !== userId) {
+      return res.status(403).json({
+        error: 'Access forbidden',
+        message: 'You do not have permission to delete this draft',
+      });
+    }
+    
+    // Delete the draft
+    const result = await deleteDraft(draftId);
+    
+    return res.json({
+      message: 'Draft deleted successfully',
+      deleted: result
+    });
+  } catch (error) {
+    console.error('Error deleting draft:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to delete draft',
     });
   }
 });

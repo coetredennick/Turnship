@@ -102,6 +102,9 @@ export const authAPI = {
   // Test Gmail connection
   testGmail: () => api.get('/auth/gmail/test'),
   
+  // Check Gmail connection status
+  checkGmailStatus: () => api.get('/auth/gmail/status'),
+  
   // Initiate OAuth flow (redirect)
   initiateLogin: () => {
     window.location.href = 'http://localhost:3001/auth/google';
@@ -139,16 +142,38 @@ export const emailsAPI = {
     timeout: 60000 // 60 seconds for AI generation
   }),
   
-  // Save email draft for a specific connection
+  // Save email draft for a specific connection (old system - single draft)
   saveDraft: (connectionId, draft) => api.put(`/api/emails/draft/${connectionId}`, { draft }),
   
-  // Mark email as sent for a specific connection
-  sendEmail: (connectionId, emailType = 'First Impression') => api.post(`/api/emails/send/${connectionId}`, { 
-    emailType 
+  // Actually send email via Gmail API for a specific connection
+  sendEmail: (connectionId, emailType = 'First Impression', subject, body) => api.post(`/api/emails/send/${connectionId}`, { 
+    emailType,
+    subject,
+    body
   }),
   
-  // Get saved draft for a specific connection
-  getDraft: (connectionId) => api.get(`/api/emails/draft/${connectionId}`)
+  // Get saved draft for a specific connection (old system - single draft)
+  getDraft: (connectionId) => api.get(`/api/emails/draft/${connectionId}`),
+  
+  // NEW MULTIPLE DRAFTS API FUNCTIONS
+  
+  // Save new draft (multiple drafts support)
+  saveNewDraft: (connectionId, subject, body) => api.post(`/api/emails/drafts/${connectionId}`, { 
+    subject, 
+    body 
+  }),
+  
+  // Get all drafts for a connection
+  getDrafts: (connectionId) => api.get(`/api/emails/drafts/${connectionId}`),
+  
+  // Update existing draft
+  updateDraft: (draftId, subject, body) => api.put(`/api/emails/drafts/${draftId}`, { 
+    subject, 
+    body 
+  }),
+  
+  // Delete specific draft
+  deleteDraft: (draftId) => api.delete(`/api/emails/drafts/${draftId}`)
 };
 
 // General API functions for future use

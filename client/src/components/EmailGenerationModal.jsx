@@ -131,10 +131,8 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
     setDraftSaveResults(prev => ({ ...prev, [connectionId]: null }));
     
     try {
-      const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
-      // Find the connection to get current status for labeling the draft
-      const connection = connections.find(c => c.id === connectionId);
-      await emailsAPI.saveDraft(connectionId, draftContent);
+      // Use new multiple drafts API
+      await emailsAPI.saveNewDraft(connectionId, email.subject, email.body);
       setDraftSaveResults(prev => ({ 
         ...prev, 
         [connectionId]: { success: true, message: 'Draft saved successfully!' }
@@ -274,19 +272,20 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
 
               {/* Email Options */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Purpose */}
+                {/* Purpose - Simplified Options */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Purpose/Goal
+                    Purpose/Goal (Updated: 3 options only)
                   </label>
                   <select
+                    key={`purpose-select-${Date.now()}`}
                     value={options.purpose}
                     onChange={(e) => setOptions(prev => ({ ...prev, purpose: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="summer-internship">Summer Internship</option>
-                    <option value="just-reaching-out">Just Reaching Out</option>
                     <option value="advice">Advice</option>
+                    <option value="just-reaching-out">Just reaching out</option>
                   </select>
                 </div>
 

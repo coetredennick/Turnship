@@ -23,6 +23,10 @@ const Dashboard = () => {
   const [testingGmail, setTestingGmail] = useState(false);
   const [gmailStatus, setGmailStatus] = useState(null);
   
+  // Gmail connection state
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [checkingGmailStatus, setCheckingGmailStatus] = useState(true);
+  
   // Connections state
   const [connections, setConnections] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -48,7 +52,7 @@ const Dashboard = () => {
   
   // Email generation state for composer panel
   const [emailOptions, setEmailOptions] = useState({
-    purpose: 'informational-interview',
+    purpose: 'summer-internship',
     tone: 'professional', 
     length: 'medium'
   });
@@ -78,10 +82,62 @@ const Dashboard = () => {
     }
   };
 
+  // Handle Gmail connection
+  const handleConnectGmail = () => {
+    // Redirect to OAuth flow
+    window.location.href = 'http://localhost:3001/auth/google';
+  };
+
   // Load connections on component mount
   useEffect(() => {
     loadConnections();
   }, []);
+
+  // Check Gmail connection status
+  useEffect(() => {
+    const checkGmailStatus = async () => {
+      try {
+        setCheckingGmailStatus(true);
+        const response = await authAPI.checkGmailStatus();
+        setGmailConnected(response.data.connected);
+      } catch (error) {
+        console.error('Error checking Gmail status:', error);
+        setGmailConnected(false);
+      } finally {
+        setCheckingGmailStatus(false);
+      }
+    };
+
+    if (user) {
+      checkGmailStatus();
+    }
+  }, [user]);
+
+  // Refresh Gmail status when user returns from OAuth
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromOAuth = urlParams.get('oauth_success');
+    
+    if (fromOAuth && user) {
+      // Clear the URL parameter
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Refresh Gmail status
+      const refreshGmailStatus = async () => {
+        try {
+          setCheckingGmailStatus(true);
+          const response = await authAPI.checkGmailStatus();
+          setGmailConnected(response.data.connected);
+        } catch (error) {
+          console.error('Error refreshing Gmail status:', error);
+        } finally {
+          setCheckingGmailStatus(false);
+        }
+      };
+      
+      refreshGmailStatus();
+    }
+  }, [user]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -202,20 +258,31 @@ const Dashboard = () => {
     setShowEmailComposer(true);
   };
 
-  // Handle draft bank selection
-  const handleDraftSelected = (connection) => {
+  // Handle viewing draft bank for specific connection
+  const handleViewDrafts = (connection) => {
+    setDraftBankConnection(connection);
+    setShowDraftBank(true);
+  };
+
+  // Handle draft selection from draft bank
+  const handleDraftSelected = (connection, draft) => {
     setSelectedConnection(connection);
-    setGeneratedEmailForComposer(null); // Load existing draft
-    setLoadExistingDraft(true); // Load existing draft for editing
-    setShowDraftBank(false);
+    // Pass the draft data as initialEmail
+    setGeneratedEmailForComposer({
+      id: draft.id,
+      subject: draft.subject,
+      body: draft.body,
+      connectionId: connection.id
+    });
+    setLoadExistingDraft(false); // Don't load existing draft, use the selected one
     setShowEmailComposer(true);
   };
 
-  // Handle draft deletion
-  const handleDraftDeleted = (connectionId) => {
-    // Refresh connections to update draft status
+  // Handle draft deleted
+  const handleDraftDeleted = (draftId) => {
+    // Refresh connections to update any UI that might show draft counts
     loadConnections();
-    console.log('Draft deleted for connection:', connectionId);
+    console.log('Draft deleted:', draftId);
   };
 
   // Handle edit connection
@@ -318,10 +385,8 @@ const Dashboard = () => {
         body: email.body
       });
       
-      // Save the draft to the connection - API expects { draft } object
-      const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
-      
-      await emailsAPI.saveDraft(email.connectionId, draftContent);
+      // Use new multiple drafts API
+      await emailsAPI.saveNewDraft(email.connectionId, email.subject, email.body);
       
       // Refresh connections to update draft status
       loadConnections();
@@ -493,48 +558,39 @@ const Dashboard = () => {
                 )}
               </div>
               
-              {/* Gmail Connection Card */}
+              {/* Gmail Connection Status */}
               <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-red-100 rounded-full">
-                    <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                  <div className={`p-2 rounded-full ${gmailConnected ? 'bg-green-100' : 'bg-yellow-100'}`}>
+                    <svg className={`w-4 h-4 ${gmailConnected ? 'text-green-600' : 'text-yellow-600'}`} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
                     </svg>
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-medium text-gray-900">Gmail Connection</h3>
-                    <p className="text-xs text-gray-600 truncate">
-                      {gmailStatus?.success 
-                        ? `Connected as ${gmailStatus.data?.profile?.emailAddress}`
-                        : 'Test your Gmail integration'}
-                    </p>
+                    <h3 className="text-sm font-medium text-gray-900">Gmail</h3>
+                    <div className="flex items-center space-x-2">
+                      {checkingGmailStatus ? (
+                        <span className="text-xs text-gray-500">Checking...</span>
+                      ) : gmailConnected ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Not Connected
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    onClick={handleGmailTest}
-                    disabled={testingGmail}
-                    className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {testingGmail ? (
-                      <>
-                        <InlineLoading size={12} className="mr-1" />
-                        Testing...
-                      </>
-                    ) : (
-                      'Test'
-                    )}
-                  </button>
+                  {!checkingGmailStatus && !gmailConnected && (
+                    <button
+                      onClick={handleConnectGmail}
+                      className="px-3 py-1 text-xs font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Connect
+                    </button>
+                  )}
                 </div>
-                {gmailStatus && (
-                  <div className={`mt-2 p-2 rounded-md text-xs ${
-                    gmailStatus.success 
-                      ? 'bg-green-50 border border-green-200 text-green-700' 
-                      : 'bg-red-50 border border-red-200 text-red-700'
-                  }`}>
-                    {gmailStatus.success 
-                      ? '✅ Gmail connection successful!' 
-                      : `❌ ${gmailStatus.error}`}
-                  </div>
-                )}
               </div>
               
               <button
@@ -632,8 +688,7 @@ const Dashboard = () => {
                     expanded={expandedConnections.has(connection.id)}
                     onEdit={handleEditConnection}
                     onViewDrafts={(connection) => {
-                      setDraftBankConnection(connection);
-                      setShowDraftBank(true);
+                      handleViewDrafts(connection);
                     }}
                     onRemove={handleDeleteConnection}
                     onStatusChange={handleStatusChange}
@@ -664,11 +719,9 @@ const Dashboard = () => {
                   value={emailOptions.purpose}
                   onChange={(e) => setEmailOptions(prev => ({...prev, purpose: e.target.value}))}
                 >
-                  <option value="informational-interview">Informational Interview</option>
-                  <option value="job-inquiry">Job Inquiry</option>
-                  <option value="industry-insights">Industry Insights</option>
-                  <option value="follow-up">Follow-up</option>
-                  <option value="introduction">Introduction</option>
+                  <option value="summer-internship">Summer Internship</option>
+                  <option value="advice">Advice</option>
+                  <option value="just-reaching-out">Just reaching out</option>
                 </select>
               </div>
               <div>
