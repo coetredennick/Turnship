@@ -5,6 +5,7 @@ import EmailGenerationModal from '../components/EmailGenerationModal';
 import EmailComposer, { ConnectionSelectorModal, DraftBankModal } from '../components/EmailComposer';
 import EditConnectionModal from '../components/EditConnectionModal';
 import StatusBadge from '../components/StatusBadge';
+import ConnectionCard from '../components/ConnectionCard';
 import { InlineLoading } from '../components/Loading';
 import { connectionsAPI, authAPI, handleAPIError } from '../services/api';
 
@@ -41,6 +42,19 @@ const Dashboard = () => {
   
   // Expandable connections state
   const [expandedConnections, setExpandedConnections] = useState(new Set());
+  
+  // Selected connections state for ConnectionCard
+  const [selectedConnections, setSelectedConnections] = useState(new Set());
+  
+  // Email generation state for composer panel
+  const [emailOptions, setEmailOptions] = useState({
+    purpose: 'informational-interview',
+    tone: 'professional', 
+    length: 'medium'
+  });
+  const [generatingEmail, setGeneratingEmail] = useState(false);
+  const [generatedEmails, setGeneratedEmails] = useState([]);
+  const [editingEmailId, setEditingEmailId] = useState(null);
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -225,6 +239,119 @@ const Dashboard = () => {
     });
   };
 
+  // Handle connection selection
+  const handleConnectionSelect = (connectionId) => {
+    setSelectedConnections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(connectionId)) {
+        newSet.delete(connectionId);
+      } else {
+        newSet.add(connectionId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle email generation from composer panel
+  const handleWriteEmail = async () => {
+    if (selectedConnections.size === 0) return;
+    
+    setGeneratingEmail(true);
+    try {
+      // Import the email generation API
+      const { emailsAPI } = await import('../services/api');
+      
+      const connectionIds = Array.from(selectedConnections);
+      console.log('Generating emails for connection IDs:', connectionIds);
+      console.log('Email options:', emailOptions);
+      
+      // Generate emails directly using the current options
+      const response = await emailsAPI.generateEmail(
+        connectionIds,
+        {
+          purpose: emailOptions.purpose,
+          tone: emailOptions.tone,
+          length: emailOptions.length
+        }
+      );
+      
+      console.log('Full API response:', response);
+      console.log('Response data:', response.data);
+      
+      // Set all generated emails for display
+      if (response.data && response.data.emails && response.data.emails.length > 0) {
+        console.log(`Generated ${response.data.emails.length} emails:`, response.data.emails);
+        setGeneratedEmails(response.data.emails);
+      } else {
+        console.log('No emails generated or unexpected response structure');
+        setGeneratedEmails([]);
+      }
+      
+      // Refresh connections to update statuses
+      loadConnections();
+      
+    } catch (error) {
+      console.error('Error generating email:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+    } finally {
+      setGeneratingEmail(false);
+    }
+  };
+
+  // Handle saving draft to connection
+  const handleSaveDraft = async (emailId) => {
+    const email = generatedEmails.find(e => e.connectionId === emailId);
+    if (!email) return;
+    
+    try {
+      const { emailsAPI } = await import('../services/api');
+      
+      console.log('Saving draft for connection:', email.connectionId);
+      console.log('Draft content:', {
+        subject: email.subject,
+        body: email.body
+      });
+      
+      // Save the draft to the connection - API expects { draft } object
+      const draftContent = `Subject: ${email.subject}\n\n${email.body}`;
+      
+      await emailsAPI.saveDraft(email.connectionId, draftContent);
+      
+      // Refresh connections to update draft status
+      loadConnections();
+      
+      // Remove this email from the generated emails list
+      setGeneratedEmails(prev => prev.filter(e => e.connectionId !== emailId));
+      
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      console.error('Error details:', error.response?.data || error.message);
+    }
+  };
+
+  // Handle editing the generated email
+  const handleEditEmail = (emailId) => {
+    setEditingEmailId(emailId);
+  };
+
+  // Handle removing the generated email
+  const handleRemoveEmail = (emailId) => {
+    setGeneratedEmails(prev => prev.filter(e => e.connectionId !== emailId));
+    setEditingEmailId(null);
+  };
+
+  // Handle updating email content during editing
+  const handleUpdateEmail = (emailId, field, value) => {
+    setGeneratedEmails(prev =>
+      prev.map(email =>
+        email.connectionId === emailId
+          ? { ...email, [field]: value }
+          : email
+      )
+    );
+  };
+
   const StatCard = ({ title, value, subtitle, icon, color = "blue" }) => {
     const colorClasses = {
       blue: "bg-blue-50 border-blue-200 text-blue-600",
@@ -276,7 +403,7 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen overflow-hidden bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -294,200 +421,73 @@ const Dashboard = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={logout}
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? <InlineLoading size={16} /> : 'Logout'}
-            </button>
+            
+            <div className="flex items-center space-x-4">
+              {/* Gmail Connection Card */}
+              <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-red-100 rounded-full">
+                    <svg className="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium text-gray-900">Gmail Connection</h3>
+                    <p className="text-xs text-gray-600 truncate">
+                      {gmailStatus?.success 
+                        ? `Connected as ${gmailStatus.data?.profile?.emailAddress}`
+                        : 'Test your Gmail integration'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleGmailTest}
+                    disabled={testingGmail}
+                    className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    {testingGmail ? (
+                      <>
+                        <InlineLoading size={12} className="mr-1" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Test'
+                    )}
+                  </button>
+                </div>
+                {gmailStatus && (
+                  <div className={`mt-2 p-2 rounded-md text-xs ${
+                    gmailStatus.success 
+                      ? 'bg-green-50 border border-green-200 text-green-700' 
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}>
+                    {gmailStatus.success 
+                      ? '✅ Gmail connection successful!' 
+                      : `❌ ${gmailStatus.error}`}
+                  </div>
+                )}
+              </div>
+              
+              <button
+                onClick={logout}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {loading ? <InlineLoading size={16} /> : 'Logout'}
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Gmail Status Section */}
-        <div className="mb-8">
-          <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-red-100 rounded-full">
-                  <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Gmail Connection</h3>
-                  <p className="text-sm text-gray-600">
-                    {gmailStatus?.success 
-                      ? `Connected as ${gmailStatus.data?.profile?.emailAddress}`
-                      : 'Test your Gmail integration'}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleGmailTest}
-                disabled={testingGmail}
-                className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {testingGmail ? (
-                  <>
-                    <InlineLoading size={16} className="mr-2" />
-                    Testing...
-                  </>
-                ) : (
-                  'Test Gmail Connection'
-                )}
-              </button>
-            </div>
-            {gmailStatus && (
-              <div className={`mt-4 p-3 rounded-md ${
-                gmailStatus.success 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-red-50 border border-red-200'
-              }`}>
-                <p className={`text-sm ${
-                  gmailStatus.success ? 'text-green-700' : 'text-red-700'
-                }`}>
-                  {gmailStatus.success 
-                    ? '✅ Gmail connection successful!' 
-                    : `❌ ${gmailStatus.error}`}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Networking Overview */}
-        <div className="mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Networking Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <StatCard
-              title="Recent Connections"
-              value={connections.length.toString()}
-              subtitle={connections.length === 0 ? "Start building your network" : "Growing your network"}
-              icon="👥"
-              color="blue"
-            />
-            <StatCard
-              title="Emails Sent This Week"
-              value="0"
-              subtitle="Ready to reach out?"
-              icon="📧"
-              color="green"
-            />
-            <StatCard
-              title="Follow-ups Due"
-              value="0"
-              subtitle="Stay on top of connections"
-              icon="⏰"
-              color="orange"
-            />
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Contact Dropdown */}
-            <div className="relative contact-dropdown-container">
-              <div 
-                className={`bg-white rounded-lg border border-gray-200 p-6 shadow-sm transition-all duration-200 ${
-                  connections.length === 0 
-                    ? 'opacity-60 cursor-not-allowed' 
-                    : 'hover:shadow-md cursor-pointer hover:border-blue-300'
-                }`}
-                onClick={connections.length === 0 ? undefined : () => setShowContactDropdown(!showContactDropdown)}
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-gray-100 rounded-full">
-                    <span className="text-xl">✨</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900">Contact</h3>
-                    <p className="text-sm text-gray-600">Reach out to your connections</p>
-                    {connections.length === 0 && (
-                      <span className="text-xs text-blue-600 font-medium">Add connections first</span>
-                    )}
-                  </div>
-                  {connections.length > 0 && (
-                    <svg className={`w-5 h-5 text-gray-400 transition-transform ${showContactDropdown ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              
-              {/* Dropdown Menu */}
-              {showContactDropdown && connections.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg border border-gray-200 shadow-lg z-10">
-                  <div className="py-2">
-                    <button
-                      onClick={() => {
-                        setShowEmailModal(true);
-                        setShowContactDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className="text-lg">🤖</span>
-                        <div>
-                          <p className="font-medium text-gray-900">Generate AI Email</p>
-                          <p className="text-sm text-gray-500">Let AI craft personalized messages</p>
-                        </div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Open connection selector for manual draft
-                        setShowConnectionSelector(true);
-                        setShowContactDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus:bg-gray-50 border-t border-gray-100"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <span className="text-lg">✍️</span>
-                        <div>
-                          <p className="font-medium text-gray-900">Write Manual Email</p>
-                          <p className="text-sm text-gray-500">Compose your own message</p>
-                        </div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <QuickActionCard
-              title="Add Connection"
-              description="Log a new networking contact"
-              icon="➕"
-              disabled={false}
-              onClick={() => setShowAddForm(true)}
-            />
-            <QuickActionCard
-              title="View Analytics"
-              description="Track your networking progress"
-              icon="📊"
-              disabled={true}
-            />
-          </div>
-        </div>
+      {/* Main Split-Screen Content */}
+      <div className="flex flex-col xl:flex-row h-full">
+        {/* Left Panel - Connections */}
+        <div id="connections-panel" className="w-full xl:w-1/2">
+          <div className="h-full flex flex-col">
+            <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Connections Section */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-gray-900">My Connections</h2>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Add Connection
-            </button>
-          </div>
-
           {/* Add Connection Form */}
           {showAddForm && (
             <div className="mb-6">
@@ -506,8 +506,31 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Connections List */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          {/* Combined Header and List Container */}
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex items-center space-x-6">
+                <h2 className="text-lg font-semibold text-gray-900">My Connections</h2>
+                <div className="flex items-center space-x-1">
+                  <span className="text-2xl font-bold text-blue-600">{connections.length}</span>
+                  <span className="text-sm text-gray-500">connections</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-2xl font-bold text-green-600">0</span>
+                  <span className="text-sm text-gray-500">emails sent this week</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Add Connection
+              </button>
+            </div>
+
+            {/* Connections List */}
+            <div>
             {loadingConnections ? (
               <div className="p-8 text-center">
                 <InlineLoading size={24} className="mx-auto mb-2" />
@@ -530,329 +553,269 @@ const Dashboard = () => {
             ) : (
               <div className="divide-y divide-gray-200">
                 {connections.map((connection) => (
-                  <div key={connection.id} className="p-6 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-medium text-blue-600">
-                              {connection.full_name?.charAt(0) || '?'}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="text-sm font-medium text-gray-900">{connection.full_name}</h4>
-                                <p className="text-sm text-gray-500">{connection.email}</p>
-                              </div>
-                              <button
-                                onClick={() => toggleExpanded(connection.id)}
-                                className="p-1 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
-                                aria-label={expandedConnections.has(connection.id) ? "Collapse details" : "Expand details"}
-                              >
-                                <svg 
-                                  className={`w-4 h-4 transition-transform duration-200 ${expandedConnections.has(connection.id) ? 'transform rotate-180' : ''}`}
-                                  fill="none" 
-                                  stroke="currentColor" 
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-                          {connection.company && (
-                            <div>
-                              <span className="font-medium text-gray-500">Company:</span>
-                              <span className="ml-1 text-gray-900">{connection.company}</span>
-                            </div>
-                          )}
-                          {connection.job_title && (
-                            <div>
-                              <span className="font-medium text-gray-500">Title:</span>
-                              <span className="ml-1 text-gray-900">{connection.job_title}</span>
-                            </div>
-                          )}
-                          {connection.industry && (
-                            <div>
-                              <span className="font-medium text-gray-500">Industry:</span>
-                              <span className="ml-1 text-gray-900">{connection.industry}</span>
-                            </div>
-                          )}
-                          {connection.connection_type && (
-                            <div>
-                              <span className="font-medium text-gray-500">Type:</span>
-                              <span className="ml-1 text-gray-900">{connection.connection_type}</span>
-                            </div>
-                          )}
-                          {connection.initial_purpose && (
-                            <div>
-                              <span className="font-medium text-gray-500">Purpose:</span>
-                              <span className="ml-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                                {connection.initial_purpose === 'summer-internship' ? 'Summer Internship' : 
-                                 connection.initial_purpose === 'just-reaching-out' ? 'Just Reaching Out' : 
-                                 'Advice'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        {connection.notes && (
-                          <div className="mt-2">
-                            <span className="font-medium text-gray-500 text-sm">Notes:</span>
-                            <p className="text-sm text-gray-900 mt-1">{connection.notes}</p>
-                          </div>
-                        )}
-                        <div className="mt-2 flex items-center space-x-4 text-xs text-gray-500">
-                          <div className="flex items-center space-x-2">
-                            <span>Status:</span>
-                            <StatusBadge 
-                              status={connection.email_status || 'Not Contacted'} 
-                              editable={true}
-                              onStatusChange={handleStatusChange}
-                              connectionId={connection.id}
-                              connection={connection}
-                            />
-                          </div>
-                          <span>Added: {new Date(connection.created_at).toLocaleDateString()}</span>
-                        </div>
+                  <ConnectionCard
+                    key={connection.id}
+                    connection={connection}
+                    selected={selectedConnections.has(connection.id)}
+                    onSelect={handleConnectionSelect}
+                    onExpandToggle={toggleExpanded}
+                    expanded={expandedConnections.has(connection.id)}
+                    onEdit={handleEditConnection}
+                    onViewDrafts={(connection) => {
+                      setDraftBankConnection(connection);
+                      setShowDraftBank(true);
+                    }}
+                    onRemove={handleDeleteConnection}
+                    onStatusChange={handleStatusChange}
+                  />
+                ))}
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
+
+            </main>
+          </div>
+        </div>
+
+        {/* Right Panel - Email Composer */}
+        <div id="composer-panel" className="w-full xl:w-1/2 h-full flex flex-col p-6 overflow-hidden">
+          {/* Email Composition Header */}
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Email Composition</h1>
+          
+          {/* Options Panel */}
+          <div className="mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={emailOptions.purpose}
+                  onChange={(e) => setEmailOptions(prev => ({...prev, purpose: e.target.value}))}
+                >
+                  <option value="informational-interview">Informational Interview</option>
+                  <option value="job-inquiry">Job Inquiry</option>
+                  <option value="industry-insights">Industry Insights</option>
+                  <option value="follow-up">Follow-up</option>
+                  <option value="introduction">Introduction</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tone</label>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={emailOptions.tone}
+                  onChange={(e) => setEmailOptions(prev => ({...prev, tone: e.target.value}))}
+                >
+                  <option value="professional">Professional</option>
+                  <option value="enthusiastic">Enthusiastic</option>
+                  <option value="respectful">Respectful</option>
+                  <option value="confident">Confident</option>
+                  <option value="casual">Casual</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Length</label>
+                <select 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={emailOptions.length}
+                  onChange={(e) => setEmailOptions(prev => ({...prev, length: e.target.value}))}
+                >
+                  <option value="medium">Medium</option>
+                  <option value="short">Short</option>
+                  <option value="long">Long</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Write Email Button */}
+          <button 
+            onClick={handleWriteEmail}
+            disabled={selectedConnections.size === 0 || generatingEmail}
+            className="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+          >
+            {generatingEmail ? 'Generating...' : `Write Email (${selectedConnections.size} selected)`}
+          </button>
+          
+          {/* Email Output */}
+          <div 
+            id="email-output" 
+            className="flex-1 overflow-y-auto mt-4 border rounded-lg bg-white min-h-0"
+          >
+            {generatedEmails.length > 0 ? (
+              <div className="p-4 space-y-6 pb-16">
+                <div className="border-b border-gray-200 pb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-gray-900">Generated Emails</h3>
+                    <span className="text-sm text-gray-500">
+                      {generatedEmails.length} email{generatedEmails.length !== 1 ? 's' : ''} generated
+                    </span>
+                  </div>
+                </div>
+                
+                {generatedEmails.map((email, index) => (
+                  <div key={email.connectionId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <div className="border-b border-gray-200 pb-3 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-md font-medium text-gray-900">
+                          Email {index + 1} - {email.recipient?.name}
+                        </h4>
+                        <span className="text-sm text-gray-500">
+                          {new Date(email.generated_at).toLocaleString()}
+                        </span>
                       </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => {
-                            setDraftBankConnection(connection);
-                            setShowDraftBank(true);
-                          }}
-                          className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
-                          title="View Drafts"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleEditConnection(connection)}
-                          className="p-1 text-gray-400 hover:text-blue-600 focus:outline-none"
-                          title="Edit connection"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteConnection(connection.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 focus:outline-none"
-                          title="Delete connection"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                      <div className="text-sm text-gray-600 mb-2">
+                        <strong>To:</strong> {email.recipient?.name} ({email.recipient?.email})
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">
+                        <strong>Company:</strong> {email.recipient?.company || 'N/A'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        <strong>Options:</strong> {email.parameters?.purpose} | {email.parameters?.tone} | {email.parameters?.length}
                       </div>
                     </div>
                     
-                    {/* Expandable Content */}
-                    {expandedConnections.has(connection.id) && (
-                      <div className="mt-4 pt-4 border-t border-gray-200 bg-gray-50 -mx-6 px-6 py-4 rounded-b-lg transition-all duration-300 ease-in-out">
-                        <div className="space-y-4">
-                          {/* Full Connection Description */}
-                          {connection.custom_connection_description && (
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">Connection Description</h5>
-                              <p className="text-sm text-gray-900 leading-relaxed">{connection.custom_connection_description}</p>
-                            </div>
-                          )}
-                          
-                          {/* Full Notes */}
-                          {connection.notes && (
-                            <div>
-                              <h5 className="text-sm font-medium text-gray-700 mb-2">Notes</h5>
-                              <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap">{connection.notes}</p>
-                            </div>
-                          )}
-                          
-                          {/* Timestamps and Metadata */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Timeline</h5>
-                              <div className="space-y-1">
-                                <div>
-                                  <span className="font-medium text-gray-700">Created:</span>
-                                  <span className="ml-2 text-gray-900">
-                                    {new Date(connection.created_at).toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </span>
-                                </div>
-                                {connection.updated_at && connection.updated_at !== connection.created_at && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Updated:</span>
-                                    <span className="ml-2 text-gray-900">
-                                      {new Date(connection.updated_at).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </span>
-                                  </div>
-                                )}
-                                {connection.last_email_sent_date && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Last Email:</span>
-                                    <span className="ml-2 text-gray-900">
-                                      {new Date(connection.last_email_sent_date).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric'
-                                      })}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div>
-                              <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Details</h5>
-                              <div className="space-y-1">
-                                {connection.industry && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Industry:</span>
-                                    <span className="ml-2 text-gray-900">{connection.industry}</span>
-                                  </div>
-                                )}
-                                {connection.connection_type && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Connection Type:</span>
-                                    <span className="ml-2 text-gray-900">{connection.connection_type}</span>
-                                  </div>
-                                )}
-                                {connection.initial_purpose && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Initial Purpose:</span>
-                                    <span className="ml-2 text-gray-900">
-                                      {connection.initial_purpose === 'summer-internship' ? 'Summer Internship' : 
-                                       connection.initial_purpose === 'just-reaching-out' ? 'Just Reaching Out' : 
-                                       'Advice'}
-                                    </span>
-                                  </div>
-                                )}
-                                {connection.last_email_draft && (
-                                  <div>
-                                    <span className="font-medium text-gray-700">Draft Status:</span>
-                                    <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">
-                                      Has Draft
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                        {editingEmailId === email.connectionId ? (
+                          <input
+                            type="text"
+                            value={email.subject}
+                            onChange={(e) => handleUpdateEmail(email.connectionId, 'subject', e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        ) : (
+                          <div className="p-3 bg-white border border-gray-200 rounded-md">
+                            <p className="text-sm text-gray-900">{email.subject}</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Email Body</label>
+                        {editingEmailId === email.connectionId ? (
+                          <textarea
+                            value={email.body}
+                            onChange={(e) => handleUpdateEmail(email.connectionId, 'body', e.target.value)}
+                            rows={8}
+                            className="w-full p-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                          />
+                        ) : (
+                          <div className="p-4 bg-white border border-gray-200 rounded-md">
+                            <div className="whitespace-pre-wrap text-sm text-gray-900 leading-relaxed">
+                              {email.body}
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
-                    )}
+                    </div>
+                    
+                    <div className="flex space-x-3 pt-4">
+                      {editingEmailId === email.connectionId ? (
+                        <>
+                          <button 
+                            onClick={() => setEditingEmailId(null)}
+                            className="flex-1 py-2 px-4 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          >
+                            Save Changes
+                          </button>
+                          <button 
+                            onClick={() => setEditingEmailId(null)}
+                            className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => handleSaveDraft(email.connectionId)}
+                            className="flex-1 py-2 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          >
+                            Save as Draft
+                          </button>
+                          <button 
+                            onClick={() => handleEditEmail(email.connectionId)}
+                            className="py-2 px-4 bg-gray-200 text-gray-700 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleRemoveEmail(email.connectionId)}
+                            className="py-2 px-4 bg-red-200 text-red-700 font-medium rounded-md hover:bg-red-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="p-4 h-full flex items-center justify-center">
+                <div className="text-center text-gray-500">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl">✉️</span>
+                  </div>
+                  <p>Select connections and click 'Write Email' to generate a message.</p>
+                </div>
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Getting Started Guide */}
-        <div className="bg-blue-50 rounded-lg border border-blue-200 p-6">
-          <h3 className="text-lg font-medium text-blue-900 mb-3">
-            🚀 Getting Started with Turnship
-          </h3>
-          <div className="space-y-3">
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                1
-              </div>
-              <div>
-                <p className="text-blue-800 font-medium">Test your Gmail connection</p>
-                <p className="text-blue-700 text-sm">Make sure Turnship can access your Gmail account</p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3">
-              <div className={`flex-shrink-0 w-6 h-6 ${connections.length > 0 ? 'bg-blue-600' : 'bg-gray-400'} text-white rounded-full flex items-center justify-center text-sm font-bold`}>
-                2
-              </div>
-              <div>
-                <p className={`${connections.length > 0 ? 'text-blue-800' : 'text-gray-600'} font-medium`}>
-                  {connections.length > 0 ? 'Add your first connection ✓' : 'Add your first connection'}
-                </p>
-                <p className={`${connections.length > 0 ? 'text-blue-700' : 'text-gray-500'} text-sm`}>
-                  {connections.length > 0 ? 'Great start! Keep building your network' : 'Start building your networking database'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start space-x-3">
-              <div className="flex-shrink-0 w-6 h-6 bg-gray-400 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                3
-              </div>
-              <div>
-                <p className="text-gray-600 font-medium">Generate your first email (Coming Soon)</p>
-                <p className="text-gray-500 text-sm">Let AI craft personalized networking messages</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Email Generation Modal */}
-        <EmailGenerationModal
-          isOpen={showEmailModal}
-          onClose={() => setShowEmailModal(false)}
-          connections={connections}
-          onEmailGenerated={handleEmailGenerated}
-        />
-        
-        {/* Connection Selector Modal for Manual Emails */}
-        <ConnectionSelectorModal
-          isOpen={showConnectionSelector}
-          onClose={() => setShowConnectionSelector(false)}
-          connections={connections}
-          onConnectionSelected={handleManualEmailConnection}
-        />
-        
-        {/* Draft Bank Modal */}
-        <DraftBankModal
-          isOpen={showDraftBank}
-          onClose={() => {
-            setShowDraftBank(false);
-            setDraftBankConnection(null);
-          }}
-          connections={connections}
-          targetConnection={draftBankConnection}
-          onDraftSelected={handleDraftSelected}
-          onDraftDeleted={handleDraftDeleted}
-        />
-        
-        {/* Email Composer Modal */}
-        <EmailComposer
-          isOpen={showEmailComposer}
-          onClose={() => setShowEmailComposer(false)}
-          connection={selectedConnection}
-          initialEmail={generatedEmailForComposer}
-          onEmailSent={handleEmailSent}
-          onDraftSaved={handleDraftSaved}
-          loadExistingDraft={loadExistingDraft}
-        />
-        
-        {/* Edit Connection Modal */}
-        <EditConnectionModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          connection={connectionToEdit}
-          onConnectionUpdated={handleConnectionUpdated}
-        />
-      </main>
+      {/* Email Generation Modal */}
+      <EmailGenerationModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        connections={connections}
+        onEmailGenerated={handleEmailGenerated}
+      />
+      
+      {/* Connection Selector Modal for Manual Emails */}
+      <ConnectionSelectorModal
+        isOpen={showConnectionSelector}
+        onClose={() => setShowConnectionSelector(false)}
+        connections={connections}
+        onConnectionSelected={handleManualEmailConnection}
+      />
+      
+      {/* Draft Bank Modal */}
+      <DraftBankModal
+        isOpen={showDraftBank}
+        onClose={() => {
+          setShowDraftBank(false);
+          setDraftBankConnection(null);
+        }}
+        connections={connections}
+        targetConnection={draftBankConnection}
+        onDraftSelected={handleDraftSelected}
+        onDraftDeleted={handleDraftDeleted}
+      />
+      
+      {/* Email Composer Modal */}
+      <EmailComposer
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        connection={selectedConnection}
+        initialEmail={generatedEmailForComposer}
+        onEmailSent={handleEmailSent}
+        onDraftSaved={handleDraftSaved}
+        loadExistingDraft={loadExistingDraft}
+      />
+      
+      {/* Edit Connection Modal */}
+      <EditConnectionModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        connection={connectionToEdit}
+        onConnectionUpdated={handleConnectionUpdated}
+      />
     </div>
   );
 };

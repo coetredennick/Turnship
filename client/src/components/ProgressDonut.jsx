@@ -61,6 +61,9 @@ const ProgressDonut = ({
   const color = getStatusColor(connection.email_status);
   const isComplete = progress === 100;
   
+  // Debug logging to track status changes
+  console.log(`ProgressDonut - Status: ${connection.email_status}, Progress: ${progress}%, Connection:`, connection);
+  
   // SVG calculations
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
