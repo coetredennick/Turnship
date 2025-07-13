@@ -12,17 +12,17 @@ const DEFAULT_USER_PROFILE = DEV_USER_PROFILE;
 // Purpose-specific prompt templates
 const PURPOSE_PROMPTS = {
   'informational-interview': {
-    instruction: `You are Amy Chen, a Computer Science student at Stanford University graduating in 2025. You're interested in artificial intelligence, networking automation, and tech entrepreneurship. Write a professional networking email requesting a 15-20 minute informational interview.`,
+    instruction: `Write a professional networking email requesting a 15-20 minute informational interview.`,
     
     template: (connectionData, userProfile, options) => {
       const { full_name, company, job_title, industry, custom_connection_description, notes } = connectionData;
       const context = custom_connection_description || notes || '';
       
-      return `Write a professional networking email from ${userProfile.name}, a ${userProfile.major} student at ${userProfile.university}, requesting a 15-20 minute informational interview with ${full_name} who works as ${job_title} at ${company} in the ${industry} industry.
+      return `Write a professional networking email from ${userProfile.name || 'the student'}, a ${userProfile.major || 'student'} at ${userProfile.university || 'university'}, requesting a 15-20 minute informational interview with ${full_name} who works as ${job_title} at ${company} in the ${industry} industry.
 
 Key details:
-- Student graduating in ${userProfile.graduationYear}
-- Interested in ${userProfile.interests}
+- Student graduating in ${userProfile.graduationYear || 'upcoming year'}
+- Interested in ${Array.isArray(userProfile.interests) ? userProfile.interests.join(', ') : userProfile.interests || 'professional development'}
 - Context about the connection: ${context}
 - Tone: ${options.tone}
 - Length: ${options.length}
@@ -47,7 +47,7 @@ EMAIL:
   },
 
   'job-inquiry': {
-    instruction: `You are Amy Chen, a Computer Science student at Stanford University graduating in 2025. You're interested in artificial intelligence, networking automation, and tech entrepreneurship. Write a professional networking email inquiring about potential job opportunities.`,
+    instruction: `Write a professional networking email inquiring about potential job opportunities.`,
     
     template: (connectionData, userProfile, options) => {
       const { full_name, company, job_title, industry, custom_connection_description, notes } = connectionData;
@@ -377,6 +377,20 @@ const retryWithBackoff = async (fn, maxRetries = 3) => {
 const buildEnhancedContext = (connectionData, userProfile, options) => {
   const { full_name, company, job_title, industry, email_status, custom_connection_description, notes, last_email_sent_date } = connectionData;
   
+  // Enhanced connection description handling
+  const primaryDescription = custom_connection_description && custom_connection_description.trim();
+  const secondaryNotes = notes && notes.trim();
+  
+  // Combine connection context intelligently
+  let combinedConnectionContext = '';
+  if (primaryDescription && secondaryNotes && primaryDescription !== secondaryNotes) {
+    combinedConnectionContext = `${primaryDescription}. Additional context: ${secondaryNotes}`;
+  } else if (primaryDescription) {
+    combinedConnectionContext = primaryDescription;
+  } else if (secondaryNotes) {
+    combinedConnectionContext = secondaryNotes;
+  }
+  
   // Get base status context
   const baseStatusContext = STATUS_CONTEXT_TEMPLATES[email_status] || STATUS_CONTEXT_TEMPLATES['Not Contacted'];
   
@@ -397,22 +411,20 @@ const buildEnhancedContext = (connectionData, userProfile, options) => {
       company: company || 'their company',
       role: job_title || 'their role',
       industry: industry || 'their industry',
-      customDescription: custom_connection_description || notes || '',
+      customDescription: combinedConnectionContext || '',
+      hasPersonalContext: !!combinedConnectionContext,
       currentStatus: email_status || 'Not Contacted'
     },
     
     // Enhanced user profile context
     user: {
-      ...userProfile,
-      // Build achievement highlights for relevant context
-      keyAchievements: userProfile.achievements.slice(0, 2).map(a => 
-        `${a.title}${a.company ? ` at ${a.company}` : ''} - ${a.description}`
-      ),
-      // Extract relevant technical skills
-      relevantSkills: userProfile.technicalSkills.slice(0, 4).join(', '),
-      // Format interests for natural language
-      coreInterests: userProfile.interests.join(', '),
-      personalHobbies: userProfile.personalInterests.slice(0, 2).join(' and ')
+      name: userProfile.name,
+      email: userProfile.email,
+      university: userProfile.university,
+      major: userProfile.major,
+      year: userProfile.year,
+      graduationYear: userProfile.graduationYear,
+      currentRole: userProfile.currentRole
     },
     
     // Status-based messaging approach
@@ -424,9 +436,7 @@ const buildEnhancedContext = (connectionData, userProfile, options) => {
     // Generation preferences
     preferences: {
       tone: options.tone,
-      length: options.length,
-      formality: userProfile.communicationStyle.formality,
-      personality: userProfile.communicationStyle.personality
+      length: options.length
     }
   };
 };
@@ -435,21 +445,31 @@ const buildEnhancedContext = (connectionData, userProfile, options) => {
 const buildContextAwarePrompt = (context, aiPurpose) => {
   const { connection, user, status, purpose, preferences } = context;
   
+  // Determine if we have rich personal connection context
+  const hasPersonalContext = connection.customDescription && connection.customDescription.trim().length > 0;
+  const personalContextSection = hasPersonalContext ? `
+🔥 CRITICAL PERSONAL CONNECTION CONTEXT 🔥
+This is the MOST IMPORTANT information for personalization:
+"${connection.customDescription}"
+
+This personal context MUST be the central focus of your email. Reference this specific context naturally and prominently throughout the email.` : '';
+  
   return `You are ${user.name}, a ${user.year} ${user.major} student at ${user.university} graduating in ${user.graduationYear}. 
 
-STUDENT BACKGROUND:
-- Academic: ${user.gpa} GPA, relevant coursework in ${user.relevantCoursework.slice(0, 2).join(' and ')}
-- Experience: ${user.keyAchievements.join('; ')}
-- Technical Skills: ${user.relevantSkills}
-- Interests: ${user.coreInterests}
-- Personal: Enjoys ${user.personalHobbies}
-- Unique Value: ${user.uniqueValue}
+${personalContextSection}
+
+STUDENT BACKGROUND (Keep Brief):
+- Currently pursuing ${user.major} at ${user.university}
+- Expected graduation: ${user.graduationYear}
+- Dedicated to building professional experience and networking in the industry
 
 CONNECTION CONTEXT:
-- Recipient: ${connection.name}${connection.role ? `, ${connection.role}` : ''}${connection.company ? ` at ${connection.company}` : ''}
-- Industry: ${connection.industry}
-- Relationship Status: ${connection.currentStatus}
-- Connection Notes: ${connection.customDescription || 'No specific context provided'}
+- Recipient: ${connection.name}
+- Position: ${connection.role || 'Professional'}${connection.company ? ` at ${connection.company}` : ''}
+- Industry: ${connection.industry || 'their field'}
+- Company: ${connection.company || 'their organization'}
+- Personal Connection Details: ${connection.customDescription || 'No specific personal context provided'}
+- Current Status: ${connection.currentStatus || 'Not Contacted'}
 
 MESSAGING APPROACH (Based on Status):
 - Approach: ${status.approach}
@@ -464,16 +484,39 @@ PURPOSE FRAMEWORK (${purpose.primaryGoal}):
 GENERATION PREFERENCES:
 - Tone: ${preferences.tone}
 - Length: ${preferences.length}
-- Style: ${preferences.formality}, ${preferences.personality}
 
-Generate a professional networking email that:
-1. Uses the appropriate ${status.approach} approach for someone with ${connection.currentStatus} status
-2. Incorporates relevant details from your background that connect to their ${connection.industry} work
-3. Follows the ${purpose.primaryGoal} conversation framework
-4. Maintains a ${preferences.tone} tone throughout
-5. Includes a compelling subject line
-6. ${status.context === 'first impression' ? 'Makes a strong first impression' : `Acknowledges ${status.context}`}
-7. Ends with a ${status.callToAction}
+🎯 CRITICAL EMAIL GENERATION INSTRUCTIONS:
+
+1. **ABSOLUTE PRIORITY**: If personal connection context exists, make it the CENTERPIECE of your email
+   - Reference the specific meeting, conversation, or shared experience
+   - Use it as the opening hook or main body content
+   - Make it feel natural and conversational, not forced
+
+2. **PERSONALIZATION HIERARCHY**:
+   - PRIMARY: Personal connection context (meeting details, shared conversations)
+   - SECONDARY: Their specific work, company, and industry
+   - TERTIARY: Brief mention of your academic background
+
+3. **NATURAL INTEGRATION**: Weave personal context seamlessly into the email structure:
+   - Subject line should immediately acknowledge the personal connection
+   - Opening should immediately acknowledge the personal connection
+   - Body should build on that shared experience or conversation
+
+4. **PROFESSIONAL BALANCE**: Keep the personal context professional and relevant
+   - Reference shared experiences in a business-appropriate way
+   - Connect personal context to professional networking goals
+   - Maintain respect and professionalism throughout
+
+5. **EMAIL STRUCTURE**:
+   - Uses the appropriate ${status.approach} approach for ${connection.currentStatus} status
+   - Follows the ${purpose.primaryGoal} conversation framework  
+   - Maintains a ${preferences.tone} tone throughout
+   - Includes a compelling subject line that references their work/company or personal connection
+   - ${status.context === 'first impression' ? 'Makes a strong first impression' : `Acknowledges ${status.context}`}
+   - Ends with a ${status.callToAction}
+
+${hasPersonalContext ? `
+🚨 REMEMBER: The personal connection context "${connection.customDescription}" is your GOLDEN TICKET to personalization. Use it as the foundation for the entire email!` : ''}
 
 Format your response as:
 SUBJECT: [compelling subject line]

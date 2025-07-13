@@ -2,7 +2,7 @@ const express = require('express');
 const passport = require('passport');
 const { google } = require('googleapis');
 const { requireAuth } = require('../middleware/auth');
-const { getUserTokens } = require('../db/connection');
+const { getUserTokens, createUserWithEmail, updateUserProfile, findUserByEmail } = require('../db/connection');
 const GmailDevService = require('../services/gmail-dev');
 
 const router = express.Router();
@@ -44,9 +44,131 @@ router.get('/google/callback', (req, res, next) => passport.authenticate('google
 
     console.log('Login successful - Session after login:', req.session);
     console.log('Login successful - User:', req.user);
+    
+    // Check if user needs to complete profile
+    if (!user.profile_completed) {
+      return res.redirect(`${CLIENT_URL}/onboarding`);
+    }
+    
     return res.redirect(`${CLIENT_URL}/dashboard`);
   });
 })(req, res, next));
+
+// Create new user account (traditional signup)
+router.post('/signup', async (req, res) => {
+  try {
+    const { email, username, full_name, university, major, year, graduation_year } = req.body;
+    
+    // Validate required fields
+    if (!email || !username || !full_name) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Email, username, and full name are required'
+      });
+    }
+    
+    // Validate Gmail address
+    if (!email.endsWith('@gmail.com')) {
+      return res.status(400).json({
+        error: 'Invalid email address',
+        message: 'Please use a Gmail address for email integration'
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'User already exists',
+        message: 'An account with this email already exists'
+      });
+    }
+    
+    // Create new user
+    const newUser = await createUserWithEmail({
+      email,
+      username,
+      full_name,
+      university,
+      major,
+      year,
+      graduation_year
+    });
+    
+    // Log the user in
+    req.logIn(newUser, (loginErr) => {
+      if (loginErr) {
+        console.error('Auto-login error after signup:', loginErr);
+        return res.status(500).json({
+          error: 'Account created but login failed',
+          message: 'Please try logging in manually'
+        });
+      }
+      
+      return res.status(201).json({
+        message: 'Account created successfully',
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          full_name: newUser.full_name,
+          university: newUser.university,
+          major: newUser.major,
+          year: newUser.year,
+          graduation_year: newUser.graduation_year,
+          profile_completed: newUser.profile_completed,
+          onboarding_step: newUser.onboarding_step
+        }
+      });
+    });
+    
+  } catch (error) {
+    console.error('Signup error:', error);
+    return res.status(500).json({
+      error: 'Account creation failed',
+      message: 'An error occurred while creating your account'
+    });
+  }
+});
+
+// Update user profile
+router.put('/profile', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profileData = req.body;
+    
+    // Update the user profile
+    const updatedUser = await updateUserProfile(userId, profileData);
+    
+    return res.json({
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+    
+  } catch (error) {
+    console.error('Profile update error:', error);
+    return res.status(500).json({
+      error: 'Profile update failed',
+      message: error.message || 'An error occurred while updating your profile'
+    });
+  }
+});
+
+// Get current user profile
+router.get('/profile', requireAuth, async (req, res) => {
+  try {
+    return res.json({
+      user: req.user
+    });
+    
+  } catch (error) {
+    console.error('Profile fetch error:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch profile',
+      message: 'An error occurred while fetching your profile'
+    });
+  }
+});
 
 // DEVELOPMENT MODE: Mock authenticated user
 router.get('/me', (req, res) => {

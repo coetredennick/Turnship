@@ -1,26 +1,32 @@
 const { google } = require('googleapis');
-const { getUserTokens, updateUserTokens } = require('../db/connection');
+const { getUserTokens, updateUserTokens, findUserById } = require('../db/connection');
 const { createOAuth2Client } = require('../services/oauth');
 
-const requireAuth = (req, res, next) => {
-  // DEVELOPMENT MODE: Create mock user if none exists
-  if (process.env.NODE_ENV === 'development' && !req.user) {
-    req.user = {
-      id: 1,
-      email: 'coetredfsu@gmail.com',
-      name: 'Dev User'
-    };
-    console.log('Development mode: Mock user created for API request');
+const requireAuth = async (req, res, next) => {
+  // If user is already attached to request (from session), proceed
+  if (req.user) {
     return next();
   }
   
-  if (!req.user) {
-    return res.status(401).json({
-      error: 'Authentication required',
-      message: 'Please log in to access this resource',
-    });
+  // DEVELOPMENT MODE: Use the real user from database if available
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      // Try to get the first user from database (for development testing)
+      const user = await findUserById(1);
+      if (user) {
+        req.user = user;
+        console.log('Development mode: Using real user from database:', user.email);
+        return next();
+      }
+    } catch (error) {
+      console.error('Error fetching user in development mode:', error);
+    }
   }
-  return next();
+  
+  return res.status(401).json({
+    error: 'Authentication required',
+    message: 'Please log in to access this resource',
+  });
 };
 
 const optionalAuth = (req, res, next) => {
@@ -110,3 +116,4 @@ module.exports = {
   refreshTokenIfNeeded,
   createGoogleAuthClient,
 };
+

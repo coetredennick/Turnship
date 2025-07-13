@@ -55,6 +55,11 @@ const Dashboard = () => {
   const [generatingEmail, setGeneratingEmail] = useState(false);
   const [generatedEmails, setGeneratedEmails] = useState([]);
   const [editingEmailId, setEditingEmailId] = useState(null);
+  
+  // Profile management state
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState('view'); // 'view' or 'edit'
 
   const handleGmailTest = async (e) => {
     e.preventDefault();
@@ -414,7 +419,7 @@ const Dashboard = () => {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">
-                  Welcome back, {user?.name || 'there'}!
+                  Welcome back, {user?.full_name || user?.username || user?.name || 'there'}!
                 </h1>
                 <p className="text-sm text-gray-600">
                   Ready to expand your network?
@@ -423,6 +428,71 @@ const Dashboard = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center space-x-2 p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-sm font-medium text-white">
+                      {user?.full_name ? user.full_name.charAt(0).toUpperCase() : user?.name?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-gray-900">
+                      {user?.full_name || user?.name || 'User'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {user?.email || 'No email'}
+                    </p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div className="py-1">
+                      <div className="px-4 py-2 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900">{user?.full_name || user?.name}</p>
+                        <p className="text-xs text-gray-500">{user?.email}</p>
+                        {user?.university && (
+                          <p className="text-xs text-gray-500">{user.university}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setProfileModalMode('view');
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span>View Profile</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setProfileModalMode('edit');
+                          setShowProfileModal(true);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Edit Profile</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               {/* Gmail Connection Card */}
               <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
                 <div className="flex items-center space-x-3">
@@ -816,6 +886,92 @@ const Dashboard = () => {
         connection={connectionToEdit}
         onConnectionUpdated={handleConnectionUpdated}
       />
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {profileModalMode === 'view' ? 'Profile Information' : 'Edit Profile'}
+              </h2>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {profileModalMode === 'view' ? (
+                // View Mode
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <p className="text-gray-900">{user?.full_name || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <p className="text-gray-900">{user?.email || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">University</label>
+                    <p className="text-gray-900">{user?.university || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Major</label>
+                    <p className="text-gray-900">{user?.major || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                    <p className="text-gray-900">{user?.year || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Graduation Year</label>
+                    <p className="text-gray-900">{user?.graduation_year || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn</label>
+                    <p className="text-gray-900">{user?.linkedin_url || 'Not provided'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <p className="text-gray-900">{user?.phone || 'Not provided'}</p>
+                  </div>
+                </div>
+              ) : (
+                // Edit Mode - Simple message for now
+                <div className="text-center py-8">
+                  <p className="text-gray-600 mb-4">Profile editing functionality coming soon!</p>
+                  <p className="text-sm text-gray-500">
+                    For now, you can view your profile information above.
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              {profileModalMode === 'view' && (
+                <button
+                  onClick={() => setProfileModalMode('edit')}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Edit Profile
+                </button>
+              )}
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

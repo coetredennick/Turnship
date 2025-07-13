@@ -198,16 +198,7 @@ const ConnectionCard = ({
                       <span className="ml-2 text-gray-900">{connection.connection_type}</span>
                     </div>
                   )}
-                  {connection.initial_purpose && (
-                    <div>
-                      <span className="font-medium text-gray-700">Initial Purpose:</span>
-                      <span className="ml-2 text-gray-900">
-                        {connection.initial_purpose === 'summer-internship' ? 'Summer Internship' : 
-                         connection.initial_purpose === 'just-reaching-out' ? 'Just Reaching Out' : 
-                         'Advice'}
-                      </span>
-                    </div>
-                  )}
+
                   {connection.last_email_draft && (
                     <div>
                       <span className="font-medium text-gray-700">Draft Status:</span>

@@ -29,15 +29,7 @@ const EmailGenerationModal = ({ isOpen, onClose, connections = [], onEmailGenera
     }
   }, [isOpen]);
 
-  // Smart defaults - set purpose based on selected connection's initial_purpose
-  useEffect(() => {
-    if (isOpen && selectedConnections.length === 1) {
-      const connection = connections.find(c => selectedConnections.includes(c.id));
-      if (connection?.initial_purpose) {
-        setOptions(prev => ({ ...prev, purpose: connection.initial_purpose }));
-      }
-    }
-  }, [isOpen, selectedConnections, connections]);
+  // No smart defaults needed since initial_purpose is removed
 
   // Get email status badge color (matching simplified 5-status system)
   const getStatusBadgeColor = (status) => {

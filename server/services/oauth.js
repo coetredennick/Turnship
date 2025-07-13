@@ -53,7 +53,7 @@ const initializeOAuth = () => {
           access_token: accessToken,
           refresh_token: refreshToken,
           token_expiry: tokenExpiry,
-          scope: profile.json.scope,
+          scope: profile._json?.scope || 'gmail.readonly gmail.send',
         };
 
         await updateUserTokens(user.id, tokens);

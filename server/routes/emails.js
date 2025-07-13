@@ -22,7 +22,7 @@ const validateEmailGenerationRequest = (data) => {
     errors.push('All connection IDs must be positive integers');
   }
   
-  const validPurposes = ['summer-internship', 'just-reaching-out', 'advice', 'informational-interview', 'job-inquiry', 'industry-insights', 'follow-up', 'introduction'];
+  const validPurposes = ['summer-internship', 'just-reaching-out', 'advice'];
   if (!data.purpose || !validPurposes.includes(data.purpose)) {
     errors.push(`Purpose is required and must be one of: ${validPurposes.join(', ')}`);
   }
@@ -57,11 +57,11 @@ const verifyConnectionOwnership = async (connectionIds, userId) => {
 };
 
 // Helper function to generate AI-powered email content
-const generateEmailContent = async (connections, purpose, tone, length) => {
+const generateEmailContent = async (connections, userProfile, purpose, tone, length) => {
   try {
     // Use AI service to generate batch emails
     const options = { purpose, tone, length };
-    const result = await generateBatchEmails(connections, DEFAULT_USER_PROFILE, options);
+    const result = await generateBatchEmails(connections, userProfile, options);
     
     // Handle any failed generations
     if (result.failed.length > 0) {
@@ -83,12 +83,12 @@ const generateEmailContent = async (connections, purpose, tone, length) => {
     
     // Fallback to basic template if AI fails
     console.log('Falling back to basic email templates...');
-    return generateFallbackEmails(connections, purpose, tone, length);
+    return generateFallbackEmails(connections, userProfile, purpose, tone, length);
   }
 };
 
 // Fallback function for basic email templates
-const generateFallbackEmails = (connections, purpose, tone, length) => {
+const generateFallbackEmails = (connections, userProfile, purpose, tone, length) => {
   // Map college-friendly purposes to template keys
   const purposeMapping = {
     'summer-internship': 'job-inquiry',
@@ -111,7 +111,7 @@ I'm happy to work around your schedule and can meet virtually at your convenienc
 Thank you for considering my request.
 
 Best regards,
-Amy Chen`
+${userProfile.name}`
     },
     'job-inquiry': {
       subject: 'Inquiry About Opportunities at {company}',
@@ -126,7 +126,7 @@ Would you be open to a brief conversation about opportunities at {company}?
 I look forward to hearing from you.
 
 Best regards,
-Amy Chen`
+${userProfile.name}`
     },
     'industry-insights': {
       subject: 'Seeking Industry Insights from {company}',
@@ -141,7 +141,7 @@ Would you be available for a brief conversation to share your thoughts on the cu
 Thank you for your time and consideration.
 
 Best regards,
-Amy Chen`
+${userProfile.name}`
     },
     'follow-up': {
       subject: 'Following Up on Our Conversation',
@@ -154,7 +154,7 @@ Our discussion was particularly enlightening and has given me a lot to think abo
 I'd love to stay connected and keep you updated on my progress. Please let me know if there's anything I can help you with in return.
 
 Best regards and thank you again,
-Amy Chen`
+${userProfile.name}`
     },
     'introduction': {
       subject: 'Introduction and Connection Request',
@@ -167,7 +167,7 @@ I noticed your impressive background at {company} and your role as {job_title}. 
 I'd love to connect and potentially learn from your expertise. Would you be open to a brief conversation?
 
 Looking forward to connecting,
-Amy Chen`
+${userProfile.name}`
     }
   };
   
@@ -232,8 +232,18 @@ router.post('/generate', requireAuth, async (req, res) => {
       connectionIds.map(id => getConnectionById(id))
     );
     
-    // Generate emails
-    const generatedEmails = await generateEmailContent(connections, purpose, tone, length);
+    // Generate emails using essential user profile data only
+    const userProfile = {
+      name: req.user.full_name,
+      email: req.user.email,
+      university: req.user.university,
+      major: req.user.major,
+      year: req.user.year,
+      graduationYear: req.user.graduation_year,
+      currentRole: req.user.current_role || 'Student'
+    };
+    
+    const generatedEmails = await generateEmailContent(connections, userProfile, purpose, tone, length);
     
     // Update email status to First Impression for all connections
     await Promise.all(

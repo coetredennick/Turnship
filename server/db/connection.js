@@ -13,11 +13,52 @@ const db = new sqlite3.Database(DB_PATH, (err) => {
 
 const initDB = () => new Promise((resolve, reject) => {
   db.serialize(() => {
-    // Create users table
+    // Create users table with comprehensive profile fields
     db.run(`CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       email TEXT UNIQUE NOT NULL,
+      
+      -- Basic Profile Information
+      full_name TEXT,
+      university TEXT,
+      major TEXT,
+      year TEXT,
+      graduation_year TEXT,
+      current_role TEXT DEFAULT 'Student',
+      
+      -- Contact Information
+      linkedin_url TEXT,
+      phone TEXT,
+      
+      -- Gmail Integration
+      gmail_connected BOOLEAN DEFAULT FALSE,
+      gmail_last_sync DATETIME,
+      
+      -- Academic Details
+      gpa TEXT,
+      relevant_coursework TEXT,
+      
+      -- Professional Interests
+      interests TEXT,
+      personal_interests TEXT,
+      
+      -- Skills & Experience
+      technical_skills TEXT,
+      achievements TEXT,
+      
+      -- Personal Pitch & Goals
+      unique_value TEXT,
+      career_goals TEXT,
+      
+      -- Communication Preferences
+      communication_style TEXT,
+      networking_approach TEXT,
+      
+      -- Profile Completion Status
+      profile_completed BOOLEAN DEFAULT FALSE,
+      onboarding_step INTEGER DEFAULT 1,
+      
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`, (err) => {
@@ -166,7 +207,8 @@ const addEmailTrackingColumns = () => new Promise((resolve, reject) => {
     'ALTER TABLE connections ADD COLUMN custom_connection_description TEXT',
     'ALTER TABLE connections ADD COLUMN initial_purpose TEXT',
     'ALTER TABLE connections ADD COLUMN status_started_date DATETIME',
-    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME'
+    'ALTER TABLE connections ADD COLUMN composer_opened_date DATETIME',
+    'ALTER TABLE connections ADD COLUMN draft_status TEXT'
   ];
 
   let completed = 0;
@@ -198,8 +240,8 @@ const createUser = (googleProfile) => new Promise((resolve, reject) => {
   const username = displayName;
 
   db.run(
-    'INSERT INTO users (username, email) VALUES (?, ?)',
-    [username, email],
+    'INSERT INTO users (username, email, full_name) VALUES (?, ?, ?)',
+    [username, email, displayName],
     function insertCallback(err) {
       if (err) {
         reject(err);
@@ -208,10 +250,121 @@ const createUser = (googleProfile) => new Promise((resolve, reject) => {
           id: this.lastID,
           username,
           email,
+          full_name: displayName,
+          profile_completed: false,
+          onboarding_step: 1,
         });
       }
     },
   );
+});
+
+// Create user with email/password (for traditional signup)
+const createUserWithEmail = (userData) => new Promise((resolve, reject) => {
+  const { 
+    email, 
+    username, 
+    full_name,
+    university,
+    major,
+    year,
+    graduation_year
+  } = userData;
+
+  db.run(
+    `INSERT INTO users (
+      username, email, full_name, university, major, year, graduation_year,
+      profile_completed, onboarding_step
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [username, email, full_name, university, major, year, graduation_year, false, 2],
+    function insertCallback(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({
+          id: this.lastID,
+          username,
+          email,
+          full_name,
+          university,
+          major,
+          year,
+          graduation_year,
+          profile_completed: false,
+          onboarding_step: 2,
+        });
+      }
+    },
+  );
+});
+
+// Update user profile
+const updateUserProfile = (userId, profileData) => new Promise((resolve, reject) => {
+  const allowedFields = [
+    'full_name', 'university', 'major', 'year', 'graduation_year', 'current_role',
+    'linkedin_url', 'phone', 'gpa', 'relevant_coursework', 'interests', 
+    'personal_interests', 'technical_skills', 'achievements', 'unique_value',
+    'career_goals', 'communication_style', 'networking_approach', 
+    'profile_completed', 'onboarding_step', 'gmail_connected', 'gmail_last_sync'
+  ];
+  
+  const updateFields = [];
+  const values = [];
+  
+  Object.keys(profileData).forEach(key => {
+    if (allowedFields.includes(key)) {
+      updateFields.push(`${key} = ?`);
+      // Convert arrays and objects to JSON strings
+      if (Array.isArray(profileData[key]) || typeof profileData[key] === 'object') {
+        values.push(JSON.stringify(profileData[key]));
+      } else {
+        values.push(profileData[key]);
+      }
+    }
+  });
+  
+  if (updateFields.length === 0) {
+    return reject(new Error('No valid fields to update'));
+  }
+  
+  // Add updated_at timestamp
+  updateFields.push('updated_at = ?');
+  values.push(Date.now());
+  values.push(userId);
+  
+  const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
+  
+  db.run(query, values, function updateCallback(err) {
+    if (err) {
+      console.error('Error updating user profile:', err);
+      reject(err);
+    } else if (this.changes === 0) {
+      reject(new Error('User not found'));
+    } else {
+      // Return the updated user
+      findUserById(userId)
+        .then(user => {
+          // Parse JSON fields back to objects/arrays
+          const parsedUser = { ...user };
+          const jsonFields = ['relevant_coursework', 'interests', 'personal_interests', 
+                             'technical_skills', 'achievements', 'career_goals', 
+                             'communication_style', 'networking_approach'];
+          
+          jsonFields.forEach(field => {
+            if (parsedUser[field]) {
+              try {
+                parsedUser[field] = JSON.parse(parsedUser[field]);
+              } catch (e) {
+                // Keep as string if not valid JSON
+              }
+            }
+          });
+          
+          resolve(parsedUser);
+        })
+        .catch(reject);
+    }
+  });
 });
 
 const findUserById = (id) => new Promise((resolve, reject) => {
@@ -325,8 +478,7 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     notes,
     status = 'Not Contacted',
     email_status = 'Not Contacted',
-    custom_connection_description = '',
-    initial_purpose = null
+    custom_connection_description = ''
   } = connectionData;
 
   const timestamp = Date.now();
@@ -335,9 +487,9 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
     `INSERT INTO connections (
       user_id, email, full_name, company, connection_type, 
       job_title, industry, notes, status, email_status, custom_connection_description,
-      initial_purpose, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, initial_purpose, timestamp, timestamp],
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [userId, email, full_name, company, connection_type, job_title, industry, notes, status, email_status, custom_connection_description, timestamp, timestamp],
     function insertCallback(err) {
       if (err) {
         console.error('Error creating connection:', err);
@@ -356,7 +508,6 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
           status,
           email_status,
           custom_connection_description,
-          initial_purpose,
           created_at: timestamp,
           updated_at: timestamp,
         });
@@ -399,7 +550,7 @@ const updateConnection = (connectionId, updates) => new Promise((resolve, reject
   const allowedFields = [
     'email', 'full_name', 'company', 'connection_type', 
     'job_title', 'industry', 'notes', 'status', 'email_status',
-    'custom_connection_description', 'last_email_sent_date', 'initial_purpose',
+    'custom_connection_description', 'last_email_sent_date',
     'status_started_date', 'composer_opened_date', 'draft_status'
   ];
   
@@ -606,6 +757,8 @@ module.exports = {
   db,
   initDB,
   createUser,
+  createUserWithEmail,
+  updateUserProfile,
   findUserById,
   findUserByEmail,
   updateUserTokens,

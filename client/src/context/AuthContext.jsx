@@ -1,15 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { authAPI, handleAPIError } from '../services/api';
 
-// DEVELOPMENT MODE: Mock authenticated user
+// Initial state - will be populated by real auth check
 const initialState = {
-  user: {
-    id: 1,
-    email: 'coetredfsu@gmail.com',
-    name: 'Dev User'
-  },
-  authenticated: true,
-  loading: false,
+  user: null,
+  authenticated: false,
+  loading: true,
   error: null
 };
 
@@ -71,10 +67,31 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // DEVELOPMENT MODE: Mock auth check - always return authenticated
+  // Check authentication status
   const checkAuth = async () => {
-    // Skip API call in development
-    console.log('Development mode: Auth check bypassed');
+    try {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+      const response = await authAPI.getProfile();
+      
+      if (response.data && response.data.user) {
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: response.data.user });
+      } else {
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      // Don't set user to null if we're just starting up
+      if (error.response?.status !== 401) {
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: null });
+      } else {
+        dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: false });
+      }
+    }
+  };
+
+  // Set user directly (for after signup)
+  const setUser = (userData) => {
+    dispatch({ type: AUTH_ACTIONS.SET_USER, payload: userData });
   };
 
   // Login function (redirects to OAuth)
@@ -208,7 +225,8 @@ export const AuthProvider = ({ children }) => {
     logout,
     checkAuth,
     clearError,
-    testGmailConnection
+    testGmailConnection,
+    setUser
   };
 
   return (

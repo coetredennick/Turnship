@@ -11,8 +11,7 @@ const EditConnectionModal = ({ isOpen, onClose, connection, onConnectionUpdated 
     industry: '',
     connection_type: '',
     notes: '',
-    custom_connection_description: '',
-    initial_purpose: ''
+    custom_connection_description: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -28,8 +27,7 @@ const EditConnectionModal = ({ isOpen, onClose, connection, onConnectionUpdated 
         industry: connection.industry || '',
         connection_type: connection.connection_type || '',
         notes: connection.notes || '',
-        custom_connection_description: connection.custom_connection_description || '',
-        initial_purpose: connection.initial_purpose || ''
+        custom_connection_description: connection.custom_connection_description || ''
       });
       setErrors({});
     }
@@ -222,24 +220,6 @@ const EditConnectionModal = ({ isOpen, onClose, connection, onConnectionUpdated 
                   ))}
                 </select>
               </div>
-            </div>
-            
-            {/* Initial Purpose */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Initial Purpose
-              </label>
-              <select
-                value={formData.initial_purpose}
-                onChange={(e) => handleInputChange('initial_purpose', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Select purpose...</option>
-                <option value="summer-internship">Summer Internship</option>
-                <option value="just-reaching-out">Just Reaching Out</option>
-                <option value="advice">Advice</option>
-              </select>
             </div>
             
             {/* Notes */}

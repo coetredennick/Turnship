@@ -306,6 +306,41 @@ const PURPOSE_FRAMEWORKS = {
     keyMessages: ['respect for expertise', 'specific questions', 'growth mindset'],
     conversationFlow: ['introduction', 'context for advice', 'specific questions', 'gratitude'],
     followUpStrategy: 'implementation updates and continued questions'
+  },
+  
+  'informational-interview': {
+    primaryGoal: 'request informational interview',
+    keyMessages: ['respect for their time', 'specific learning goals', 'genuine interest in their expertise'],
+    conversationFlow: ['introduction', 'research acknowledgment', 'specific interview request', 'time commitment'],
+    followUpStrategy: 'interview scheduling and preparation'
+  },
+  
+  'job-inquiry': {
+    primaryGoal: 'inquire about job opportunities',
+    keyMessages: ['relevant qualifications', 'company-specific interest', 'value proposition'],
+    conversationFlow: ['introduction', 'company research', 'qualification summary', 'opportunity inquiry'],
+    followUpStrategy: 'application process and additional materials'
+  },
+  
+  'industry-insights': {
+    primaryGoal: 'gain industry knowledge and trends',
+    keyMessages: ['industry curiosity', 'respect for expertise', 'learning orientation'],
+    conversationFlow: ['introduction', 'industry context', 'specific insight requests', 'knowledge sharing'],
+    followUpStrategy: 'insight implementation and continued learning'
+  },
+  
+  'follow-up': {
+    primaryGoal: 'maintain and strengthen existing connection',
+    keyMessages: ['previous interaction reference', 'value-added updates', 'continued interest'],
+    conversationFlow: ['reference to previous contact', 'relevant updates', 'continued engagement', 'next steps'],
+    followUpStrategy: 'ongoing relationship maintenance'
+  },
+  
+  'introduction': {
+    primaryGoal: 'establish initial professional connection',
+    keyMessages: ['common ground', 'mutual interests', 'professional curiosity'],
+    conversationFlow: ['self-introduction', 'connection reason', 'shared interests', 'relationship building'],
+    followUpStrategy: 'regular engagement and value sharing'
   }
 };
 

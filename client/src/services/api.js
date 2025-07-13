@@ -87,6 +87,15 @@ export const authAPI = {
   // Check current user authentication status
   checkAuth: () => api.get('/auth/me'),
   
+  // Create new user account
+  signup: (userData) => api.post('/auth/signup', userData),
+  
+  // Get user profile
+  getProfile: () => api.get('/auth/profile'),
+  
+  // Update user profile
+  updateProfile: (profileData) => api.put('/auth/profile', profileData),
+  
   // Logout user
   logout: () => api.post('/auth/logout'),
   

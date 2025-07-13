@@ -64,8 +64,7 @@ const AddConnectionForm = ({ onSubmit, onCancel, isLoading = false }) => {
     job_title: '',
     industry: '',
     custom_connection_description: '',
-    notes: '',
-    initial_purpose: ''
+    notes: ''
   });
 
   const [errors, setErrors] = useState({});
@@ -148,8 +147,7 @@ const AddConnectionForm = ({ onSubmit, onCancel, isLoading = false }) => {
           job_title: '',
           industry: '',
           custom_connection_description: '',
-          notes: '',
-          initial_purpose: ''
+          notes: ''
         });
         setErrors({});
         setTouched({});
@@ -170,8 +168,7 @@ const AddConnectionForm = ({ onSubmit, onCancel, isLoading = false }) => {
       job_title: '',
       industry: '',
       custom_connection_description: '',
-      notes: '',
-      initial_purpose: ''
+      notes: ''
     });
     setErrors({});
     setTouched({});
@@ -273,23 +270,6 @@ const AddConnectionForm = ({ onSubmit, onCancel, isLoading = false }) => {
             hasError={touched.industry && errors.industry}
             error={errors.industry}
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Initial Purpose
-          </label>
-          <select
-            value={formData.initial_purpose || ''}
-            onChange={(e) => setFormData(prev => ({ ...prev, initial_purpose: e.target.value }))}
-            disabled={isLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <option value="">Select purpose...</option>
-            <option value="summer-internship">Summer Internship</option>
-            <option value="just-reaching-out">Just Reaching Out</option>
-            <option value="advice">Advice</option>
-          </select>
         </div>
 
         <InputField

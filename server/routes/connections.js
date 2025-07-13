@@ -99,13 +99,7 @@ const validateConnectionData = (data, isUpdate = false) => {
     errors.push('Custom connection description must not exceed 500 characters');
   }
   
-  // Validate initial_purpose if provided
-  if (data.initial_purpose) {
-    const validPurposes = ['summer-internship', 'just-reaching-out', 'advice'];
-    if (!validPurposes.includes(data.initial_purpose)) {
-      errors.push('Invalid initial purpose');
-    }
-  }
+  // initial_purpose field removed - no validation needed
   
   // Validate last_email_draft if provided
   if (data.last_email_draft && typeof data.last_email_draft !== 'string') {
