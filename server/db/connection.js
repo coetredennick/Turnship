@@ -487,20 +487,57 @@ const createConnection = (userId, connectionData) => new Promise((resolve, rejec
         console.error('Error creating connection:', err);
         reject(err);
       } else {
-        resolve({
-          id: this.lastID,
-          user_id: userId,
-          email,
-          full_name,
-          company,
-          connection_type,
-          job_title,
-          industry,
-          notes,
-          custom_connection_description,
-          created_at: timestamp,
-          updated_at: timestamp,
-        });
+        const connectionId = this.lastID;
+        
+        // Create initial timeline stage for the new connection
+        createInitialTimeline(connectionId)
+          .then(timelineResult => {
+            // Return the connection with timeline data populated
+            resolve({
+              id: connectionId,
+              user_id: userId,
+              email,
+              full_name,
+              company,
+              connection_type,
+              job_title,
+              industry,
+              notes,
+              custom_connection_description,
+              current_stage_id: timelineResult.stageId,
+              timeline_data: JSON.stringify({
+                currentStage: 1,
+                stages: [{
+                  id: timelineResult.stageId,
+                  type: 'first_impression',
+                  order: 1,
+                  status: 'waiting'
+                }]
+              }),
+              created_at: timestamp,
+              updated_at: timestamp,
+            });
+          })
+          .catch(timelineErr => {
+            console.error('Error creating initial timeline:', timelineErr);
+            // Return connection without timeline data if timeline creation fails
+            resolve({
+              id: connectionId,
+              user_id: userId,
+              email,
+              full_name,
+              company,
+              connection_type,
+              job_title,
+              industry,
+              notes,
+              custom_connection_description,
+              current_stage_id: null,
+              timeline_data: null,
+              created_at: timestamp,
+              updated_at: timestamp,
+            });
+          });
       }
     }
   );
@@ -953,31 +990,60 @@ const createStage = (connectionId, stageData) => new Promise((resolve, reject) =
   });
 });
 
-// Create initial timeline for a new connection
+// Create initial timeline for a new connection (idempotent)
 const createInitialTimeline = (connectionId) => new Promise((resolve, reject) => {
   if (!connectionId) {
     return reject(new Error('Connection ID is required'));
   }
-
-  const timestamp = Date.now();
   
-  // Start a transaction to create the initial timeline and settings
-  db.serialize(() => {
-    db.run('BEGIN TRANSACTION');
+  // First check if timeline already exists (idempotent behavior)
+  db.get(`
+    SELECT id, stage_type, stage_order, stage_status 
+    FROM connection_timeline_stages 
+    WHERE connection_id = ? 
+    ORDER BY stage_order ASC 
+    LIMIT 1
+  `, [connectionId], (checkErr, existingStage) => {
+    if (checkErr) {
+      return reject(checkErr);
+    }
     
-    // Create the first stage: 'first_impression' with 'waiting' status (red circle)
-    db.run(`
-      INSERT INTO connection_timeline_stages (
-        connection_id, stage_type, stage_order, stage_status, 
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `, [connectionId, 'first_impression', 1, 'waiting', timestamp, timestamp], function(err) {
-      if (err) {
-        db.run('ROLLBACK');
-        return reject(err);
-      }
+    // If timeline already exists, return existing data
+    if (existingStage) {
+      return resolve({
+        connectionId,
+        stageId: existingStage.id,
+        stage: {
+          id: existingStage.id,
+          type: existingStage.stage_type,
+          order: existingStage.stage_order,
+          status: existingStage.stage_status
+        },
+        timelineInitialized: false, // Already existed
+        existed: true
+      });
+    }
+    
+    // Timeline doesn't exist, create it
+    const timestamp = Date.now();
+    
+    // Start a transaction to create the initial timeline and settings
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
       
-      const stageId = this.lastID;
+      // Create the first stage: 'first_impression' with 'waiting' status (red circle)
+      db.run(`
+        INSERT INTO connection_timeline_stages (
+          connection_id, stage_type, stage_order, stage_status, 
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [connectionId, 'first_impression', 1, 'waiting', timestamp, timestamp], function(err) {
+        if (err) {
+          db.run('ROLLBACK');
+          return reject(err);
+        }
+        
+        const stageId = this.lastID;
       
       // Create default connection settings
       db.run(`
@@ -1030,6 +1096,7 @@ const createInitialTimeline = (connectionId) => new Promise((resolve, reject) =>
           });
         });
       });
+    });
     });
   });
 });

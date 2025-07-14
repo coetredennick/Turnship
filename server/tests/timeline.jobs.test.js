@@ -230,11 +230,11 @@ describe('Timeline Jobs Tests', () => {
     });
 
     it('should create follow-up stages for expired deadlines', async () => {
-      // Create initial timeline
-      await createInitialTimeline(testConnectionId);
+      // Create initial timeline (or get existing one since createConnection auto-creates it)
+      const timeline = await createInitialTimeline(testConnectionId);
       
       // Update first impression to sent status, which should create response stage with deadline
-      await updateStageStatus(testConnectionId, 1, 'sent', {
+      await updateStageStatus(testConnectionId, timeline.stageId, 'sent', {
         email_content: 'Test email content'
       });
       

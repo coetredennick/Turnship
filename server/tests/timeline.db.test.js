@@ -92,7 +92,10 @@ describe('Timeline Database Integration Tests', () => {
       // Verify the result structure
       expect(result).toHaveProperty('connectionId', testConnectionId);
       expect(result).toHaveProperty('stageId');
-      expect(result).toHaveProperty('timelineInitialized', true);
+      // Note: Since createConnection now calls createInitialTimeline automatically,
+      // this will return the existing timeline (timelineInitialized: false)
+      expect(result).toHaveProperty('timelineInitialized', false);
+      expect(result).toHaveProperty('existed', true);
       expect(result.stage).toEqual({
         id: result.stageId,
         type: 'first_impression',
@@ -282,6 +285,119 @@ describe('Timeline Database Integration Tests', () => {
       expect(stages.stages[0].stage_type).toBe('first_impression');
       expect(stages.stages[0].stage_status).toBe('waiting');
       expect(stages.stages[0].stage_order).toBe(1);
+    });
+  });
+
+  describe('Phase 9: Idempotent Timeline Creation', () => {
+    it('should create initial timeline when none exists', async () => {
+      // Create a fresh connection without using createConnection (which now auto-creates timeline)
+      const { db } = require('../db/connection');
+      const timestamp = Date.now();
+      
+      const freshConnectionId = await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO connections (
+            user_id, email, full_name, company, connection_type, 
+            job_title, industry, notes, custom_connection_description,
+            current_stage_id, timeline_data, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [testUserId, 'fresh@example.com', 'Fresh User', 'Fresh Corp', 'professional', 'Engineer', 'Tech', 'Notes', '', null, null, timestamp, timestamp], function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        });
+      });
+      
+      // Now create timeline for the first time
+      const result = await createInitialTimeline(freshConnectionId);
+      
+      expect(result.connectionId).toBe(freshConnectionId);
+      expect(result.stageId).toBeDefined();
+      expect(result.stage.type).toBe('first_impression');
+      expect(result.stage.status).toBe('waiting');
+      expect(result.stage.order).toBe(1);
+      expect(result.timelineInitialized).toBe(true);
+      expect(result.existed).toBeUndefined();
+      
+      // Verify timeline was created in database
+      const timeline = await getTimelineStages(freshConnectionId);
+      expect(timeline.stages).toHaveLength(1);
+      expect(timeline.stages[0].stage_type).toBe('first_impression');
+    });
+
+    it('should return existing timeline when called again (idempotent)', async () => {
+      // Create timeline first time
+      const firstResult = await createInitialTimeline(testConnectionId);
+      
+      // Call again - should return existing timeline
+      const secondResult = await createInitialTimeline(testConnectionId);
+      
+      expect(secondResult.connectionId).toBe(testConnectionId);
+      expect(secondResult.stageId).toBe(firstResult.stageId); // Same stage ID
+      expect(secondResult.stage.type).toBe('first_impression');
+      expect(secondResult.stage.status).toBe('waiting');
+      expect(secondResult.stage.order).toBe(1);
+      expect(secondResult.timelineInitialized).toBe(false); // Not newly initialized
+      expect(secondResult.existed).toBe(true); // Indicates it already existed
+      
+      // Verify no duplicate stages were created
+      const timeline = await getTimelineStages(testConnectionId);
+      expect(timeline.stages).toHaveLength(1);
+    });
+
+    it('should not create duplicate timeline stages', async () => {
+      // Create timeline multiple times
+      await createInitialTimeline(testConnectionId);
+      await createInitialTimeline(testConnectionId);
+      await createInitialTimeline(testConnectionId);
+      
+      // Should still only have one stage
+      const timeline = await getTimelineStages(testConnectionId);
+      expect(timeline.stages).toHaveLength(1);
+      expect(timeline.stages[0].stage_type).toBe('first_impression');
+      expect(timeline.stages[0].stage_order).toBe(1);
+    });
+
+    it('should work correctly with connection that has existing stages', async () => {
+      // Create a fresh connection and manually add a stage with 'draft' status
+      const { db } = require('../db/connection');
+      const timestamp = Date.now();
+      
+      const freshConnectionId = await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO connections (
+            user_id, email, full_name, company, connection_type, 
+            job_title, industry, notes, custom_connection_description,
+            current_stage_id, timeline_data, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [testUserId, 'existing@example.com', 'Existing User', 'Existing Corp', 'professional', 'Engineer', 'Tech', 'Notes', '', null, null, timestamp, timestamp], function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        });
+      });
+      
+      // Manually create a timeline stage with 'draft' status
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO connection_timeline_stages (
+            connection_id, stage_type, stage_order, stage_status, 
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [freshConnectionId, 'first_impression', 1, 'draft', timestamp, timestamp], function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        });
+      });
+      
+      // Now call createInitialTimeline - should return existing
+      const result = await createInitialTimeline(freshConnectionId);
+      
+      expect(result.existed).toBe(true);
+      expect(result.stage.status).toBe('draft'); // Preserves existing status
+      expect(result.timelineInitialized).toBe(false);
+      
+      // Should still only have one stage
+      const timeline = await getTimelineStages(freshConnectionId);
+      expect(timeline.stages).toHaveLength(1);
     });
   });
 });

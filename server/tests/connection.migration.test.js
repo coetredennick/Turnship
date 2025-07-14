@@ -112,7 +112,7 @@ describe('Timeline Columns Migration', () => {
     expect(result.full_name).toBe('Test Connection');
   });
   
-  it('should populate timeline columns with null values for new connections', async () => {
+  it('should populate timeline columns automatically for new connections', async () => {
     // Run migration first
     await initDB();
     
@@ -142,7 +142,7 @@ describe('Timeline Columns Migration', () => {
     
     const result = await createConnection(userId, connectionData);
     
-    // Verify the connection was inserted with null timeline columns
+    // Verify the connection was inserted with timeline columns populated (Phase 9)
     const savedConnection = await new Promise((resolve, reject) => {
       db.get(
         "SELECT * FROM connections WHERE id = ?",
@@ -154,8 +154,16 @@ describe('Timeline Columns Migration', () => {
       );
     });
     
-    expect(savedConnection.current_stage_id).toBeNull();
-    expect(savedConnection.timeline_data).toBeNull();
+    // Phase 9: createConnection now automatically creates timeline
+    expect(savedConnection.current_stage_id).not.toBeNull();
+    expect(savedConnection.current_stage_id).toBeDefined();
+    expect(savedConnection.timeline_data).not.toBeNull();
+    expect(savedConnection.timeline_data).toBeDefined();
+    
+    // Verify timeline data is valid JSON
+    const timelineData = JSON.parse(savedConnection.timeline_data);
+    expect(timelineData.stages).toHaveLength(1);
+    expect(timelineData.stages[0].type).toBe('first_impression');
   });
   
   it('should handle duplicate column migration gracefully', async () => {

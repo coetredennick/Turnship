@@ -8,6 +8,7 @@ const {
   deleteConnection,
   trackComposerOpened,
 } = require('../db/connection');
+const { getConnectionTimeline } = require('../services/timeline');
 
 const router = express.Router();
 
@@ -139,9 +140,30 @@ router.post('/', requireAuth, async (req, res) => {
     // Create connection
     const connection = await createConnection(userId, connectionData);
     
+    // Get the timeline data for the response (if created successfully)
+    let timeline = null;
+    if (connection.current_stage_id) {
+      try {
+        timeline = await getConnectionTimeline(connection.id);
+      } catch (timelineError) {
+        console.warn('Failed to load timeline data for response:', timelineError);
+        // Use cached timeline data if available
+        if (connection.timeline_data) {
+          try {
+            timeline = JSON.parse(connection.timeline_data);
+          } catch (parseError) {
+            console.warn('Failed to parse cached timeline data:', parseError);
+          }
+        }
+      }
+    }
+    
     return res.status(201).json({
       message: 'Connection created successfully',
-      connection,
+      connection: {
+        ...connection,
+        timeline
+      },
     });
   } catch (error) {
     console.error('Error creating connection:', error);
