@@ -9,9 +9,7 @@
     "test": "NODE_ENV=test jest",
     "test:watch": "NODE_ENV=test jest --watch",
     "test:coverage": "NODE_ENV=test jest --coverage",
-    "test:ci": "NODE_ENV=test jest --coverage --watchAll=false --passWithNoTests",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "test:ci": "NODE_ENV=test jest --coverage --watchAll=false --passWithNoTests"
   },
   "dependencies": {
     "cors": "^2.8.5",

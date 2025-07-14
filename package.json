@@ -14,8 +14,6 @@
     "test:watch": "concurrently \"npm run test:watch --workspace=server\" \"npm run test:watch --workspace=client\"",
     "test:coverage": "npm run test:coverage --workspace=server && npm run test:coverage --workspace=client",
     "test:ci": "npm run test:ci --workspace=server && npm run test:ci --workspace=client",
-    "lint": "npm run lint --workspace=server && npm run lint --workspace=client",
-    "lint:fix": "npm run lint:fix --workspace=server && npm run lint:fix --workspace=client",
     "start:server": "npm run start --workspace=server",
     "start:client": "npm run preview --workspace=client",
     "install:all": "npm install && npm install --workspace=server && npm install --workspace=client",

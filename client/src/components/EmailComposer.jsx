@@ -615,6 +615,7 @@ const EmailComposer = ({
                   Subject
                 </label>
                 <input
+                  id="email-subject"
                   type="text"
                   value={email.subject}
                   onChange={(e) => handleEmailChange('subject', e.target.value)}
@@ -629,6 +630,7 @@ const EmailComposer = ({
                   Email Body
                 </label>
                 <textarea
+                  id="email-body"
                   value={email.body}
                   onChange={(e) => handleEmailChange('body', e.target.value)}
                   placeholder="Write your email content here..."

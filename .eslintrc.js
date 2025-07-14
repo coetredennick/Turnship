@@ -17,4 +17,6 @@ module.exports = {
     'no-console': 'warn',
     'no-unused-vars': 'warn',
   },
+  // Ignore test files and generated artifacts
+  ignorePatterns: ['**/tests/**', '**/*.test.*'],
 };

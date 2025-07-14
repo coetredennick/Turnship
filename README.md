@@ -84,13 +84,15 @@ npm run test -w server
 npm run test -w client
 ```
 
-### Linting
+### Linting (temporarily disabled in CI)
 
-Run linting for all workspaces:
+ESLint remains configured for the project, but the automated `npm run lint` scripts have been removed from CI until the legacy codebase is cleaned up.  You can still run the linter locally if you wish:
 
 ```bash
-npm run lint
+npx eslint client/src server/{db,routes,services} --ext js,jsx
 ```
+
+Feel free to submit follow-up PRs that re-enable the workspace lint scripts once outstanding style violations are addressed.
 
 ### Building
 

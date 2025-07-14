@@ -175,6 +175,9 @@ scheduleResponseDetection(); // Every 5 minutes
 
 ### Integration Points
 
+> **Heads-up**
+> At present the timeline visual renders only after the *first* timeline stage exists. A freshly-created connection has no stages until the backend’s `initializeTimeline()` (or `POST /timeline/stage`) endpoint is called. Until we wire that call into `createConnection()` the UI will continue to show the legacy StatusBadge for brand-new connections. This is expected behaviour and will be addressed in a follow-up task.
+
 #### Replace in `ConnectionCard.jsx`
 ```javascript
 // Replace StatusBadge with TimelineVisual
